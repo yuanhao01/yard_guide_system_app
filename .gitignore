@@ -25,3 +25,6 @@ replay_pid*
 
 # 微信开发者工具配置
 .idea/
+
+# 小程序依赖目录
+miniprogram/node_modules/
