@@ -1,13 +1,20 @@
 {
-  "description": "项目配置文件。",
+  "description": "堆场引导系统微信小程序",
   "miniprogramRoot": "miniprogram/",
-  "cloudfunctionRoot": "cloudfunctions/",
   "packOptions": {
-    "ignore": [],
+    "ignore": [
+      { "type": "folder", "value": "image" },
+      { "type": "folder", "value": "miniprogram_npm" },
+      { "type": "folder", "value": "packageAPI" },
+      { "type": "folder", "value": "packageCloud" },
+      { "type": "folder", "value": "packageComponent" },
+      { "type": "folder", "value": "packageExtend" },
+      { "type": "folder", "value": "page" }
+    ],
     "include": []
   },
   "setting": {
-    "urlCheck": true,
+    "urlCheck": false,
     "es6": true,
     "enhance": true,
     "postcss": true,
@@ -47,7 +54,7 @@
   "compileType": "miniprogram",
   "libVersion": "latest",
   "appid": "wxd62258c5b4952656",
-  "projectname": "%E5%B0%8F%E7%A8%8B%E5%BA%8F%E7%A4%BA%E4%BE%8B",
+  "projectname": "%E5%A0%86%E5%9C%BA%E5%BC%95%E5%AF%BC%E7%B3%BB%E7%BB%9F",
   "simulatorType": "wechat",
   "simulatorPluginLibVersion": {},
   "condition": {},

@@ -1,0 +1,83 @@
+.login-page {
+  box-sizing: border-box;
+  min-height: 100vh;
+  padding: 120rpx 44rpx 48rpx;
+  background: linear-gradient(165deg, #12372a 0%, #1d5c45 42%, #f4f6f5 42%);
+}
+
+.brand {
+  height: 360rpx;
+  color: #ffffff;
+  text-align: center;
+}
+
+.brand-mark {
+  width: 112rpx;
+  height: 112rpx;
+  margin: 0 auto 30rpx;
+  border: 2rpx solid rgba(255, 255, 255, 0.42);
+  border-radius: 30rpx;
+  background: rgba(255, 255, 255, 0.12);
+  font-size: 52rpx;
+  font-weight: 700;
+  line-height: 112rpx;
+}
+
+.brand-title {
+  font-size: 44rpx;
+  font-weight: 700;
+  letter-spacing: 4rpx;
+}
+
+.brand-subtitle {
+  margin-top: 18rpx;
+  color: rgba(255, 255, 255, 0.72);
+  font-size: 25rpx;
+}
+
+.login-card {
+  padding: 44rpx 36rpx 34rpx;
+  border-radius: 30rpx;
+  background: #ffffff;
+  box-shadow: 0 24rpx 80rpx rgba(12, 40, 29, 0.16);
+}
+
+.field-label {
+  margin: 8rpx 0 14rpx;
+  color: #41534b;
+  font-size: 25rpx;
+  font-weight: 600;
+}
+
+.field-input {
+  box-sizing: border-box;
+  height: 92rpx;
+  margin-bottom: 30rpx;
+  padding: 0 26rpx;
+  border: 1rpx solid #dce5e0;
+  border-radius: 16rpx;
+  background: #f8faf9;
+  font-size: 29rpx;
+}
+
+.login-button {
+  margin-top: 12rpx;
+}
+
+.privacy-tip {
+  margin-top: 24rpx;
+  color: #8a9690;
+  font-size: 22rpx;
+  text-align: center;
+}
+
+.login-tip {
+  margin-top: 24rpx;
+  color: #147d55;
+  font-size: 23rpx;
+  text-align: center;
+}
+
+.login-tip + .privacy-tip {
+  margin-top: 10rpx;
+}

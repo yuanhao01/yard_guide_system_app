@@ -1,0 +1,17 @@
+<view class="login-page">
+  <view class="brand">
+    <view class="brand-mark">场</view>
+    <view class="brand-title">堆场引导系统</view>
+    <view class="brand-subtitle">扫码或选择贝位，快速抵达作业位置</view>
+  </view>
+
+  <view class="login-card">
+    <view class="field-label">堆场使用码</view>
+    <input class="field-input" type="text" maxlength="6" placeholder="请输入现场提供的6位使用码" value="{{accessCode}}" bindinput="onAccessCodeInput" />
+    <view class="field-label">车牌号</view>
+    <input class="field-input" maxlength="30" placeholder="例如：辽A12345" value="{{plateNumber}}" bindinput="onPlateNumberInput" bindconfirm="login" />
+    <button class="primary-button login-button" loading="{{submitting}}" disabled="{{submitting}}" bindtap="login">登录</button>
+    <view class="login-tip">无需注册，输入现场提供的使用码即可登录</view>
+    <view class="privacy-tip">登录即表示同意仅在导航期间使用您的位置信息</view>
+  </view>
+</view>

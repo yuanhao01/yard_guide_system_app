@@ -1,0 +1,23 @@
+<view class="page confirm-page" wx:if="{{target}}">
+  <view class="destination-card">
+    <view class="pin">终</view>
+    <view class="destination-label">目的贝位</view>
+    <view class="destination-name">{{target.targetName}}</view>
+    <view class="destination-code">{{target.targetCode}}</view>
+    <view class="destination-meta">
+      <view><text>场区</text>{{target.blockName || '--'}}</view>
+      <view><text>贝位</text>{{target.slot}}</view>
+      <view><text>到达范围</text>{{target.arrivalRadiusM}} 米</view>
+    </view>
+  </view>
+
+  <view class="notice-card">
+    <view class="notice-title">开始前请确认</view>
+    <view class="notice-item">· 手机定位服务已开启</view>
+    <view class="notice-item">· 导航期间尽量保持小程序在前台</view>
+    <view class="notice-item">· 实际通行以现场标识和指挥为准</view>
+  </view>
+
+  <button class="primary-button" loading="{{starting}}" disabled="{{starting}}" bindtap="startNavigation">获取定位并开始导航</button>
+  <button class="secondary-button back-button" bindtap="goBack">重新选择</button>
+</view>

@@ -1,0 +1,149 @@
+.home-page {
+  padding-top: 0;
+}
+
+.hero {
+  margin: 0 -32rpx 36rpx;
+  padding: 64rpx 40rpx 52rpx;
+  border-radius: 0 0 44rpx 44rpx;
+  color: #ffffff;
+  background: linear-gradient(135deg, #12372a, #1a694b);
+}
+
+.hero-label {
+  color: rgba(255, 255, 255, 0.62);
+  font-size: 24rpx;
+}
+
+.hero-title {
+  margin: 12rpx 0 26rpx;
+  font-size: 42rpx;
+  font-weight: 700;
+}
+
+.hero-status {
+  font-size: 24rpx;
+}
+
+.status-dot {
+  display: inline-block;
+  width: 14rpx;
+  height: 14rpx;
+  margin-right: 12rpx;
+  border-radius: 50%;
+  background: #62e6a8;
+}
+
+.current-card {
+  position: relative;
+  margin-bottom: 36rpx;
+  padding: 30rpx;
+  overflow: hidden;
+  border-radius: 24rpx;
+  color: #ffffff;
+  background: #d58424;
+}
+
+.current-tag {
+  display: inline-block;
+  padding: 6rpx 14rpx;
+  border-radius: 20rpx;
+  background: rgba(255, 255, 255, 0.2);
+  font-size: 21rpx;
+}
+
+.current-title {
+  margin-top: 18rpx;
+  font-size: 32rpx;
+  font-weight: 700;
+}
+
+.current-detail {
+  margin-top: 10rpx;
+  color: rgba(255, 255, 255, 0.78);
+  font-size: 24rpx;
+}
+
+.current-action {
+  position: absolute;
+  right: 30rpx;
+  bottom: 30rpx;
+  font-size: 25rpx;
+  font-weight: 600;
+}
+
+.section-title {
+  margin: 0 4rpx 20rpx;
+  color: #52635b;
+  font-size: 25rpx;
+  font-weight: 600;
+}
+
+.action-card {
+  display: flex;
+  align-items: center;
+  margin-bottom: 22rpx;
+  padding: 30rpx;
+  border: 1rpx solid #e1e9e5;
+  border-radius: 24rpx;
+  background: #ffffff;
+}
+
+.action-icon {
+  width: 92rpx;
+  height: 92rpx;
+  border-radius: 24rpx;
+  color: #ffffff;
+  background: #147d55;
+  font-size: 32rpx;
+  font-weight: 700;
+  line-height: 92rpx;
+  text-align: center;
+}
+
+.select-icon {
+  color: #9a5a0a;
+  background: #fff0d9;
+}
+
+.action-content {
+  flex: 1;
+  margin-left: 26rpx;
+}
+
+.action-title {
+  font-size: 31rpx;
+  font-weight: 700;
+}
+
+.action-desc {
+  margin-top: 9rpx;
+  color: #7c8983;
+  font-size: 23rpx;
+}
+
+.arrow {
+  color: #9ba7a1;
+  font-size: 50rpx;
+}
+
+.safety-card {
+  margin-top: 42rpx;
+  padding: 26rpx;
+  border-left: 7rpx solid #d58424;
+  border-radius: 6rpx 18rpx 18rpx 6rpx;
+  background: #fff8eb;
+}
+
+.safety-title {
+  color: #7c490a;
+  font-size: 25rpx;
+  font-weight: 700;
+}
+
+.safety-text {
+  margin-top: 10rpx;
+  color: #826a4c;
+  font-size: 23rpx;
+  line-height: 1.7;
+}

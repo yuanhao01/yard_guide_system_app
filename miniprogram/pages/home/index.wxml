@@ -1,0 +1,37 @@
+<view class="page home-page">
+  <view class="hero">
+    <view class="hero-label">当前堆场</view>
+    <view class="hero-title">{{yardName || '尚未选择堆场'}}</view>
+    <view class="hero-status"><text class="status-dot"></text>导航服务已连接</view>
+  </view>
+
+  <view wx:if="{{currentSession}}" class="current-card" bindtap="continueNavigation">
+    <view class="current-tag">进行中</view>
+    <view class="current-title">前往 {{currentSession.targetName}}</view>
+    <view class="current-detail">剩余约 {{currentSession.remainingDistanceMeters || '--'}} 米</view>
+    <view class="current-action">继续导航 →</view>
+  </view>
+
+  <view class="section-title">选择导航方式</view>
+  <view class="action-card scan-card" bindtap="scanCode">
+    <view class="action-icon">扫</view>
+    <view class="action-content">
+      <view class="action-title">扫一扫导航</view>
+      <view class="action-desc">扫描作业单或贝位二维码</view>
+    </view>
+    <view class="arrow">›</view>
+  </view>
+  <view class="action-card" bindtap="selectTarget">
+    <view class="action-icon select-icon">选</view>
+    <view class="action-content">
+      <view class="action-title">手动选择贝位</view>
+      <view class="action-desc">按堆场、场区和贝位逐级选择</view>
+    </view>
+    <view class="arrow">›</view>
+  </view>
+
+  <view class="safety-card">
+    <view class="safety-title">行车安全提示</view>
+    <view class="safety-text">请在停车状态下操作手机。路线仅作场内辅助，请始终服从现场交通标识和人员指挥。</view>
+  </view>
+</view>

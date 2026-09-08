@@ -1,0 +1,18 @@
+<view class="page profile-page">
+  <view class="profile-card">
+    <view class="avatar">{{avatarText}}</view>
+    <view>
+      <view class="user-name">{{user.userName || '司机'}}</view>
+      <view class="user-account">{{user.driverType === 1 ? '临时司机' : '系统用户'}}</view>
+    </view>
+  </view>
+
+  <view class="card info-card">
+    <view class="info-row"><text>当前堆场</text><text>{{yardName || '--'}}</text></view>
+    <view class="info-row"><text>车牌号</text><text>{{user.plateNumber || '--'}}</text></view>
+    <view class="info-row"><text>定位用途</text><text>仅导航期间</text></view>
+    <view class="info-row" bindtap="openSettings"><text>系统权限设置</text><text class="arrow">›</text></view>
+  </view>
+
+  <button class="danger-button" bindtap="logout">退出登录</button>
+</view>

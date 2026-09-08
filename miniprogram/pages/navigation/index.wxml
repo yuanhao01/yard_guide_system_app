@@ -1,0 +1,35 @@
+<view class="navigation-page">
+  <map
+    id="navigationMap"
+    class="navigation-map"
+    longitude="{{longitude}}"
+    latitude="{{latitude}}"
+    scale="17"
+    show-location
+    enable-3D
+    enable-overlooking
+    markers="{{markers}}"
+    polyline="{{polyline}}"
+  ></map>
+
+  <view class="instruction-panel">
+    <view class="instruction-top">
+      <view class="direction-icon">↑</view>
+      <view class="instruction-content">
+        <view class="instruction-text">{{instruction}}</view>
+        <view class="target-text">目的地：{{session.targetName}}</view>
+      </view>
+    </view>
+    <view class="metrics">
+      <view><text class="metric-value">{{remainingDistance}}</text><text class="metric-unit">米</text><text class="metric-label">剩余距离</text></view>
+      <view><text class="metric-value">{{estimatedMinutes}}</text><text class="metric-unit">分钟</text><text class="metric-label">预计时间</text></view>
+      <view><text class="metric-value {{locationQualityClass}}">{{locationQuality}}</text><text class="metric-label">定位质量</text></view>
+    </view>
+    <button wx:if="{{arrivalSuggestion}}" class="arrival-button" bindtap="confirmArrival">已到达，确认完成</button>
+    <view class="tools">
+      <view bindtap="centerLocation">回到当前位置</view>
+      <view bindtap="reportException">报告异常</view>
+      <view class="stop" bindtap="cancelNavigation">结束导航</view>
+    </view>
+  </view>
+</view>

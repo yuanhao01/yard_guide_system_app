@@ -1,0 +1,86 @@
+.confirm-page {
+  padding-top: 54rpx;
+}
+
+.destination-card {
+  padding: 52rpx 32rpx 36rpx;
+  border: 1rpx solid #dfe8e3;
+  border-radius: 28rpx;
+  background: #ffffff;
+  text-align: center;
+}
+
+.pin {
+  width: 88rpx;
+  height: 88rpx;
+  margin: 0 auto 24rpx;
+  border-radius: 44rpx 44rpx 44rpx 8rpx;
+  color: #ffffff;
+  background: #d58424;
+  font-size: 32rpx;
+  font-weight: 700;
+  line-height: 88rpx;
+  transform: rotate(-45deg);
+}
+
+.pin::first-letter {
+  transform: rotate(45deg);
+}
+
+.destination-label {
+  color: #78867f;
+  font-size: 23rpx;
+}
+
+.destination-name {
+  margin-top: 12rpx;
+  font-size: 42rpx;
+  font-weight: 700;
+}
+
+.destination-code {
+  margin-top: 8rpx;
+  color: #147d55;
+  font-size: 25rpx;
+  font-weight: 600;
+}
+
+.destination-meta {
+  display: flex;
+  justify-content: space-around;
+  margin-top: 42rpx;
+  padding-top: 30rpx;
+  border-top: 1rpx solid #ebf0ed;
+  font-size: 26rpx;
+}
+
+.destination-meta text {
+  display: block;
+  margin-bottom: 7rpx;
+  color: #849089;
+  font-size: 21rpx;
+}
+
+.notice-card {
+  margin: 30rpx 0 40rpx;
+  padding: 28rpx;
+  border-radius: 18rpx;
+  background: #fff8ec;
+}
+
+.notice-title {
+  margin-bottom: 14rpx;
+  color: #754808;
+  font-size: 26rpx;
+  font-weight: 700;
+}
+
+.notice-item {
+  color: #816b4f;
+  font-size: 23rpx;
+  line-height: 1.9;
+}
+
+.back-button {
+  margin-top: 20rpx;
+}
