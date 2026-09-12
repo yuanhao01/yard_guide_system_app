@@ -1,0 +1,59 @@
+<view class="collab-page">
+  <view class="header" style="padding-top: {{statusBarHeight}}px;">
+    <view class="header-inner">
+      <view class="back" bindtap="goBack">‹</view>
+      <view class="heading">
+        <view class="title">现场协同群</view>
+        <view class="sub">{{taskLabel || '作业任务'}}</view>
+      </view>
+      <view class="online">
+        <text class="online-dot {{dissolved || !connected ? 'off' : ''}}"></text>{{dissolved ? statusText : (onlineCount + '/' + memberCount + '人在线')}}
+      </view>
+    </view>
+  </view>
+
+  <view class="tip" wx:if="{{loading}}">协同群加载中…</view>
+  <view class="tip error" wx:if="{{errorText}}">{{errorText}}</view>
+
+  <scroll-view class="chat" scroll-y scroll-into-view="{{scrollInto}}" scroll-with-animation>
+    <view class="msg {{item.self ? 'mine' : ''}}" wx:for="{{messages}}" wx:key="id" id="msg-{{item.id}}">
+      <view wx:if="{{item.type === 'system'}}" class="system-line">{{item.text}}</view>
+
+      <block wx:else>
+        <view class="msg-meta">
+          <view class="avatar {{item.roleClass}}">{{item.avatar}}</view>
+          <view class="msg-who">
+            <text class="name">{{item.name}}</text>
+            <text class="role">{{item.role}}</text>
+          </view>
+          <view class="time">{{item.time}}</view>
+        </view>
+
+        <view wx:if="{{item.type === 'text'}}" class="bubble {{item.self ? 'bubble-mine' : ''}}">
+          <text>{{item.text}}</text>
+        </view>
+
+        <view wx:if="{{item.type === 'machine'}}" class="machine-card">
+          <view class="machine-title">堆高机动态</view>
+          <view class="machine-eta">预计 <text class="machine-num">{{item.etaMin}}</text> 分钟到达</view>
+          <view class="machine-route">{{item.routeText}}</view>
+          <view class="machine-status">● {{item.statusText}}</view>
+        </view>
+      </block>
+    </view>
+    <view class="chat-pad"></view>
+  </scroll-view>
+
+  <view class="composer">
+    <view class="quick-row">
+      <view class="quick q-blue" bindtap="sendQuick" data-text="已确认位置，正在前往">📍 确认位置</view>
+      <view class="quick q-orange" bindtap="sendQuick" data-text="预计 3 分钟到达作业点">⏱ 预计到达</view>
+      <view class="quick q-green" bindtap="sendQuick" data-text="已出发，请堆高机留意">▶ 已出发</view>
+      <view class="quick q-cyan" bindtap="sendQuick" data-text="已到位，等待指挥">✓ 已到位</view>
+    </view>
+    <view class="input-row">
+      <input class="input" placeholder="{{dissolved ? '协同群已解散' : '回复群消息…'}}" disabled="{{dissolved}}" value="{{draft}}" bindinput="onDraft" confirm-type="send" bindconfirm="sendDraft" />
+      <view class="send {{sending || dissolved ? 'disabled' : ''}}" bindtap="sendDraft">发送</view>
+    </view>
+  </view>
+</view>

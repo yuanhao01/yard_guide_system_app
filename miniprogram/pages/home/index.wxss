@@ -127,6 +127,53 @@
   font-size: 50rpx;
 }
 
+.collab-card {
+  margin: 8rpx 0 28rpx;
+  padding: 28rpx;
+  border-radius: 24rpx;
+  background: linear-gradient(135deg, #0f2c50, #1a4a7a);
+  color: #ffffff;
+  box-shadow: 0 12rpx 28rpx rgba(15, 44, 80, 0.18);
+}
+
+.collab-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.collab-tag {
+  padding: 4rpx 14rpx;
+  border-radius: 8rpx;
+  background: rgba(255, 255, 255, 0.14);
+  font-size: 20rpx;
+}
+
+.collab-status {
+  color: #7dffa8;
+  font-size: 22rpx;
+}
+
+.collab-title {
+  margin-top: 16rpx;
+  font-size: 30rpx;
+  font-weight: 700;
+}
+
+.collab-desc {
+  margin-top: 8rpx;
+  color: rgba(255, 255, 255, 0.72);
+  font-size: 22rpx;
+}
+
+.collab-members {
+  margin-top: 18rpx;
+  padding-top: 16rpx;
+  border-top: 1rpx solid rgba(255, 255, 255, 0.12);
+  color: rgba(255, 255, 255, 0.86);
+  font-size: 23rpx;
+}
+
 .safety-card {
   margin-top: 42rpx;
   padding: 26rpx;

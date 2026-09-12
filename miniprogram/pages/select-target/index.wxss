@@ -1,5 +1,4 @@
-.step-title,
-.search-title {
+.hint {
   margin: 4rpx 4rpx 20rpx;
   color: #53635b;
   font-size: 25rpx;
@@ -51,60 +50,9 @@
   background: #edf1ef;
 }
 
-.search-title {
-  margin-top: 54rpx;
-}
-
-.search-box {
-  display: flex;
-  align-items: center;
-  height: 88rpx;
-  padding-left: 26rpx;
-  border: 1rpx solid #dde6e1;
-  border-radius: 18rpx;
-  background: #ffffff;
-}
-
-.search-box input {
-  flex: 1;
-  font-size: 28rpx;
-}
-
-.search-button {
-  width: 120rpx;
-  color: #147d55;
-  font-size: 27rpx;
-  font-weight: 600;
-  text-align: center;
-}
-
-.result-list {
-  margin-top: 18rpx;
-  overflow: hidden;
-  border-radius: 18rpx;
-  background: #ffffff;
-}
-
-.result-item {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 25rpx 28rpx;
-  border-bottom: 1rpx solid #edf1ef;
-}
-
-.result-name {
-  font-size: 28rpx;
-  font-weight: 600;
-}
-
-.result-code {
-  margin-top: 6rpx;
-  color: #7b8982;
+.footer-tip {
+  margin-top: 28rpx;
+  color: #849089;
   font-size: 23rpx;
-}
-
-.result-arrow {
-  color: #9aa59f;
-  font-size: 42rpx;
+  text-align: center;
 }

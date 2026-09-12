@@ -1,42 +1,29 @@
 <view class="page">
-  <view class="step-title">按层级选择</view>
+  <view class="hint">按堆场 → 场区 → 贝位选择目的地</view>
   <view class="card selector-card">
     <view class="selector-row">
       <view class="selector-label"><text class="step-number">1</text>堆场</view>
       <picker range="{{yards}}" range-key="label" value="{{yardIndex}}" bindchange="onYardChange">
-        <view class="picker-value {{yardIndex < 0 ? 'placeholder' : ''}}">{{yardIndex < 0 ? '请选择堆场' : yards[yardIndex].label}} <text>›</text></view>
+        <view class="picker-value {{yardIndex >= 0 ? '' : 'placeholder'}}">{{yardIndex >= 0 ? yards[yardIndex].label : '请选择堆场'}} <text>›</text></view>
       </picker>
     </view>
     <view class="divider"></view>
     <view class="selector-row">
       <view class="selector-label"><text class="step-number">2</text>场区</view>
-      <picker disabled="{{yardIndex < 0}}" range="{{blocks}}" range-key="label" value="{{blockIndex}}" bindchange="onBlockChange">
-        <view class="picker-value {{blockIndex < 0 ? 'placeholder' : ''}}">{{blockIndex < 0 ? '请选择场区' : blocks[blockIndex].label}} <text>›</text></view>
+      <picker disabled="{{!(yardIndex >= 0) || loadingYard}}" range="{{blocks}}" range-key="label" value="{{blockIndex}}" bindchange="onBlockChange">
+        <view class="picker-value {{blockIndex >= 0 ? '' : 'placeholder'}}">{{loadingYard ? '加载场区中…' : (blockIndex >= 0 ? blocks[blockIndex].label : '请选择场区')}} <text>›</text></view>
       </picker>
     </view>
     <view class="divider"></view>
     <view class="selector-row">
       <view class="selector-label"><text class="step-number">3</text>贝位</view>
-      <picker disabled="{{blockIndex < 0}}" range="{{bays}}" range-key="label" value="{{bayIndex}}" bindchange="onBayChange">
-        <view class="picker-value {{bayIndex < 0 ? 'placeholder' : ''}}">{{bayIndex < 0 ? '请选择贝位' : bays[bayIndex].label}} <text>›</text></view>
+      <picker disabled="{{!(blockIndex >= 0) || loadingBays}}" range="{{bays}}" range-key="label" value="{{bayIndex}}" bindchange="onBayChange">
+        <view class="picker-value {{bayIndex >= 0 ? '' : 'placeholder'}}">{{loadingBays ? '加载贝位中…' : (bayIndex >= 0 ? bays[bayIndex].label : '请选择贝位')}} <text>›</text></view>
       </picker>
     </view>
   </view>
 
-  <button class="primary-button" disabled="{{bayIndex < 0 || loading}}" loading="{{loading}}" bindtap="confirmSelection">确认目的地</button>
+  <button class="primary-button" disabled="{{!(bayIndex >= 0) || loading}}" loading="{{loading}}" bindtap="confirmSelection">确认目的地</button>
 
-  <view class="search-title">或者搜索贝位编码</view>
-  <view class="search-box">
-    <input placeholder="例如 A-12" value="{{keyword}}" bindinput="onKeywordInput" bindconfirm="search" />
-    <view class="search-button" bindtap="search">搜索</view>
-  </view>
-  <view class="result-list" wx:if="{{results.length}}">
-    <view class="result-item" wx:for="{{results}}" wx:key="id" data-index="{{index}}" bindtap="chooseSearchResult">
-      <view>
-        <view class="result-name">{{item.targetName}}</view>
-        <view class="result-code">{{item.targetCode}}</view>
-      </view>
-      <view class="result-arrow">›</view>
-    </view>
-  </view>
+  <view class="footer-tip">提空箱可在下一页输入箱号自动反显贝位</view>
 </view>

@@ -3,15 +3,69 @@
   "miniprogramRoot": "miniprogram/",
   "packOptions": {
     "ignore": [
-      { "type": "folder", "value": "image" },
-      { "type": "folder", "value": "miniprogram_npm" },
-      { "type": "folder", "value": "packageAPI" },
-      { "type": "folder", "value": "packageCloud" },
-      { "type": "folder", "value": "packageComponent" },
-      { "type": "folder", "value": "packageExtend" },
-      { "type": "folder", "value": "page" }
+      {
+        "value": "image",
+        "type": "folder"
+      },
+      {
+        "value": "miniprogram_npm",
+        "type": "folder"
+      },
+      {
+        "value": "packageAPI",
+        "type": "folder"
+      },
+      {
+        "value": "packageCloud",
+        "type": "folder"
+      },
+      {
+        "value": "packageComponent",
+        "type": "folder"
+      },
+      {
+        "value": "packageExtend",
+        "type": "folder"
+      },
+      {
+        "value": "page",
+        "type": "folder"
+      }
     ],
-    "include": []
+    "include": [
+      {
+        "value": "miniprogram/models/truck.glb",
+        "type": "file"
+      },
+      {
+        "value": "miniprogram/models/stacker.glb",
+        "type": "file"
+      },
+      {
+        "value": "miniprogram/models/container20.glb",
+        "type": "file"
+      },
+      {
+        "value": "miniprogram/models/container40.glb",
+        "type": "file"
+      },
+      {
+        "value": "models/truck.glb",
+        "type": "file"
+      },
+      {
+        "value": "models/stacker.glb",
+        "type": "file"
+      },
+      {
+        "value": "models/container20.glb",
+        "type": "file"
+      },
+      {
+        "value": "models/container40.glb",
+        "type": "file"
+      }
+    ]
   },
   "setting": {
     "urlCheck": false,
@@ -53,7 +107,7 @@
   },
   "compileType": "miniprogram",
   "libVersion": "latest",
-  "appid": "wxd62258c5b4952656",
+  "appid": "wxadc9c73e03b62b9e",
   "projectname": "%E5%A0%86%E5%9C%BA%E5%BC%95%E5%AF%BC%E7%B3%BB%E7%BB%9F",
   "simulatorType": "wechat",
   "simulatorPluginLibVersion": {},

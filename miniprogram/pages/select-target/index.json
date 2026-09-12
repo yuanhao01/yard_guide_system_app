@@ -1,3 +1,5 @@
 {
-  "navigationBarTitleText": "选择目的贝位"
+  "navigationBarTitleText": "选择目的贝位",
+  "navigationBarBackgroundColor": "#0f2c50",
+  "navigationBarTextStyle": "white"
 }

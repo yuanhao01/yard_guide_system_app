@@ -1,0 +1,59 @@
+<view class="nav-page">
+  <view class="nav-header" style="padding-top: {{statusBarHeight}}px;">
+    <view class="nav-header-inner">
+      <view class="nav-back" bindtap="goBack">‹</view>
+      <view class="nav-heading">
+        <view class="nav-title">安全操作区</view>
+        <view class="nav-subtitle">{{subtitle}}</view>
+      </view>
+    </view>
+  </view>
+
+  <view class="banner">
+    <view class="banner-arrow">↱</view>
+    <view class="banner-text">{{instruction}}</view>
+  </view>
+
+  <view class="map-wrap">
+    <canvas type="webgl" id="yardCanvas" class="yard-canvas"
+            bindtouchstart="onCanvasTouchStart"
+            bindtouchmove="onCanvasTouchMove"
+            bindtouchend="onCanvasTouchEnd"
+            bindtouchcancel="onCanvasTouchEnd"></canvas>
+    <view class="map-tools">
+      <view class="tool" bindtap="toggleFollow">
+        <view class="tool-icon">{{followIcon}}</view>
+        <view class="tool-label">{{followLabel}}</view>
+      </view>
+    </view>
+    <view class="map-zoom">
+      <view class="zoom-btn" bindtap="toggleFlatMode">{{flatLabel}}</view>
+      <view class="zoom-btn" bindtap="zoomIn">+</view>
+      <view class="zoom-btn" bindtap="zoomOut">-</view>
+      <view class="zoom-btn" bindtap="resetView">复位</view>
+    </view>
+    <view class="map-empty" wx:if="{{mapLoading && !mapError}}">地图加载中…</view>
+    <view class="map-empty" wx:if="{{mapError}}">{{mapError}}</view>
+  </view>
+
+  <view class="bottom-card">
+    <view class="task-meta" wx:if="{{equipmentName || cntrNo || carrierCode}}">
+      <text wx:if="{{workTypeLabel}}">{{workTypeLabel}}</text>
+      <text wx:if="{{equipmentName}}">{{equipmentName}}</text>
+      <text wx:if="{{carrierCode}}">{{carrierCode}}</text>
+      <text wx:if="{{cntrNo}}">{{cntrNo}} {{cntrSize}}</text>
+    </view>
+    <view class="steps-title">安全验箱步骤</view>
+    <view class="check-item"><text class="n">1</text>驶入指定位置</view>
+    <view class="check-item"><text class="n">2</text>车辆停稳</view>
+    <view class="check-item"><text class="n">3</text>拉紧驻车制动</view>
+    <view class="check-item"><text class="n">4</text>下车完成验箱</view>
+
+    <view class="warn">确认安全后再下车</view>
+
+    <button class="primary" loading="{{confirming}}" bindtap="confirmInspect">已停稳并完成验箱</button>
+    <button class="ghost" bindtap="openCollab">打开现场协同群</button>
+    <button class="ghost" bindtap="callDispatch">区域异常 · 联系调度</button>
+    <view class="foot">完成确认后进入出场导航</view>
+  </view>
+</view>

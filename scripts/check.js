@@ -6,7 +6,7 @@ const projectRoot = path.resolve(__dirname, '..')
 const miniprogramRoot = path.join(projectRoot, 'miniprogram')
 const ignoredDirectories = new Set([
   'image', 'miniprogram_npm', 'packageAPI', 'packageCloud',
-  'packageComponent', 'packageExtend', 'page'
+  'packageComponent', 'packageExtend', 'page', 'libs', 'node_modules'
 ])
 const errors = []
 

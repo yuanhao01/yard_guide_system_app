@@ -1,0 +1,49 @@
+<view class="page arrive-page">
+  <view class="hero">
+    <view class="hero-title">到位确认</view>
+    <view class="hero-sub">{{targetName || '--'}}</view>
+  </view>
+
+  <view class="card">
+    <view class="ok-row">
+      <view class="ok-badge">✓</view>
+      <view>
+        <view class="ok-title">已到达 {{targetName || '--'}}</view>
+        <view class="ok-sub">{{equipmentHint}}</view>
+      </view>
+    </view>
+
+    <view class="scene-wrap">
+      <canvas type="webgl" id="arriveCanvas" class="arrive-canvas"></canvas>
+      <view class="scene-tag">当前位置</view>
+    </view>
+
+    <view class="meta">
+      <view class="meta-item">
+        <view class="meta-cap">到位时间</view>
+        <view class="meta-val">{{arriveTime}}</view>
+      </view>
+      <view class="meta-item">
+        <view class="meta-cap">箱区校验</view>
+        <view class="meta-val ok">{{targetName || '--'}} ✓</view>
+      </view>
+      <view class="meta-item">
+        <view class="meta-cap">定位精度(手机GPS)</view>
+        <view class="meta-val">{{accuracyText}}</view>
+      </view>
+    </view>
+
+    <view class="tip">{{parkTip}}</view>
+  </view>
+
+    <button class="primary" loading="{{confirming}}" bindtap="confirmArrive">确认到位</button>
+  <button class="secondary" bindtap="renavigate">走错了？重新导航</button>
+
+  <view class="steps">
+    <view class="step done"><text class="n">✓</text>任务确认</view>
+    <view class="step-line"></view>
+    <view class="step done"><text class="n">✓</text>场内导航</view>
+    <view class="step-line"></view>
+    <view class="step active"><text class="n">3</text>{{stepLabel}}</view>
+  </view>
+</view>

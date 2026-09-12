@@ -5,5 +5,8 @@
   "description": "堆场司机定位导航微信小程序",
   "scripts": {
     "check": "node scripts/check.js"
+  },
+  "dependencies": {
+    "threejs-miniprogram": "^0.0.8"
   }
 }

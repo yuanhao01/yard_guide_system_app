@@ -1,33 +1,96 @@
-<view class="navigation-page">
-  <map
-    id="navigationMap"
-    class="navigation-map"
-    longitude="{{longitude}}"
-    latitude="{{latitude}}"
-    scale="17"
-    show-location
-    enable-3D
-    enable-overlooking
-    markers="{{markers}}"
-    polyline="{{polyline}}"
-  ></map>
+<view class="nav-page">
+  <!-- 对齐高保真 02：整块深蓝顶栏，不再叠系统绿导航栏 -->
+  <view class="nav-header" style="padding-top: {{statusBarHeight}}px;">
+    <view class="nav-header-inner">
+      <view class="nav-back" bindtap="goBack">‹</view>
+      <view class="nav-heading">
+        <view class="nav-title">场内导航</view>
+        <view class="nav-subtitle">前往 {{session.targetName || '--'}}</view>
+      </view>
+      <view class="nav-deco" aria-hidden="true"></view>
+    </view>
+  </view>
 
-  <view class="instruction-panel">
-    <view class="instruction-top">
-      <view class="direction-icon">↑</view>
-      <view class="instruction-content">
-        <view class="instruction-text">{{instruction}}</view>
-        <view class="target-text">目的地：{{session.targetName}}</view>
+  <view class="banner">
+    <view class="banner-arrow">{{instructionIcon}}</view>
+    <view class="banner-text">{{instruction}}</view>
+  </view>
+
+  <view class="map-wrap">
+    <canvas type="webgl" id="yardCanvas" class="yard-canvas"
+            bindtouchstart="onCanvasTouchStart"
+            bindtouchmove="onCanvasTouchMove"
+            bindtouchend="onCanvasTouchEnd"
+            bindtouchcancel="onCanvasTouchEnd"></canvas>
+
+    <view class="map-tools">
+      <view class="tool compass" style="transform: rotate({{compassRotate}}deg);">
+        <view class="compass-label">北</view>
+        <view class="compass-arrow">▲</view>
+      </view>
+      <view class="tool voice {{voiceOn ? 'tool-on' : ''}}" bindtap="toggleVoice">
+        <view class="tool-icon">◍</view>
+        <view class="tool-label">语音播报\n{{voiceOn ? '开启' : '关闭'}}</view>
+      </view>
+      <view class="tool" bindtap="toggleFollow">
+        <view class="tool-icon">{{followMode ? '⊕' : '⊞'}}</view>
+        <view class="tool-label">{{followMode ? '跟车' : '全场'}}</view>
+      </view>
+      <view class="tool" bindtap="calibrateHeading">
+        <view class="tool-icon">◎</view>
+        <view class="tool-label">校准朝向</view>
       </view>
     </view>
-    <view class="metrics">
-      <view><text class="metric-value">{{remainingDistance}}</text><text class="metric-unit">米</text><text class="metric-label">剩余距离</text></view>
-      <view><text class="metric-value">{{estimatedMinutes}}</text><text class="metric-unit">分钟</text><text class="metric-label">预计时间</text></view>
-      <view><text class="metric-value {{locationQualityClass}}">{{locationQuality}}</text><text class="metric-label">定位质量</text></view>
+
+    <view class="map-zoom">
+      <view class="zoom-btn flat-btn" bindtap="toggleFlatMode">{{flatMode ? '3D' : '2D'}}</view>
+      <view class="zoom-btn" bindtap="zoomIn">＋</view>
+      <view class="zoom-btn" bindtap="zoomOut">－</view>
+      <view class="zoom-btn zoom-reset" wx:if="{{viewAdjusted}}" bindtap="resetView">复位</view>
+      <view class="zoom-btn locate-btn {{locating ? 'locating' : ''}}" bindtap="locateSelf">◎</view>
     </view>
-    <button wx:if="{{arrivalSuggestion}}" class="arrival-button" bindtap="confirmArrival">已到达，确认完成</button>
-    <view class="tools">
-      <view bindtap="centerLocation">回到当前位置</view>
+
+    <view class="heading-debug">{{headingDebug}}</view>
+    <view class="map-empty" wx:if="{{mapLoading && !mapError}}">地图加载中…</view>
+    <view class="map-empty" wx:if="{{mapError}}">{{mapError}}</view>
+  </view>
+
+  <view class="bottom-card">
+    <view class="metrics">
+      <view class="metric metric-dest">
+        <view class="metric-cap">目的地</view>
+        <view class="dest-name">{{session.targetName || '--'}}</view>
+      </view>
+      <view class="metric">
+        <view class="metric-cap">剩余</view>
+        <view class="metric-num blue">{{remainingDistance}}<text class="metric-unit">m</text></view>
+      </view>
+      <view class="metric">
+        <view class="metric-cap">预计</view>
+        <view class="metric-num orange">{{estimatedMinutes}}<text class="metric-unit">分钟</text></view>
+      </view>
+    </view>
+
+    <view class="chips" wx:if="{{offYardHint}}">
+      <view class="chip chip-warn">⚠ {{offYardHint}}，进入堆场后自动跟车</view>
+    </view>
+
+    <view class="chips" wx:if="{{oneWayHint || speedLimit}}">
+      <view class="chip chip-warn" wx:if="{{oneWayHint}}">⚠ {{oneWayHint}}</view>
+      <view class="chip chip-danger" wx:if="{{speedLimit}}">
+        <text class="chip-badge">{{speedLimit}}</text>限速 {{speedLimit}}
+      </view>
+    </view>
+
+    <button wx:if="{{arrivalSuggestion}}" class="arrival-btn" bindtap="confirmArrival">已到达，确认完成</button>
+    <button wx:else class="arrival-btn arrival-btn-ghost" bindtap="confirmArrival">我已到达</button>
+
+    <view class="status-line">
+      <text class="status-dot {{locationQualityClass}}"></text>
+      定位{{locationQuality}} · {{voiceOn ? '语音播报中' : '语音已关闭'}}
+    </view>
+
+    <view class="tools-row">
       <view bindtap="reportException">报告异常</view>
       <view class="stop" bindtap="cancelNavigation">结束导航</view>
     </view>

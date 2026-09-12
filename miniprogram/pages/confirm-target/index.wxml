@@ -1,23 +1,66 @@
 <view class="page confirm-page" wx:if="{{target}}">
-  <view class="destination-card">
-    <view class="pin">终</view>
-    <view class="destination-label">目的贝位</view>
-    <view class="destination-name">{{target.targetName}}</view>
-    <view class="destination-code">{{target.targetCode}}</view>
-    <view class="destination-meta">
-      <view><text>场区</text>{{target.blockName || '--'}}</view>
-      <view><text>贝位</text>{{target.slot}}</view>
-      <view><text>到达范围</text>{{target.arrivalRadiusM}} 米</view>
+  <view class="hero">
+    <view class="hero-title">作业任务确认</view>
+    <view class="hero-sub">{{yardName || '当前堆场'}}</view>
+  </view>
+
+  <view class="task-card">
+    <view class="badge">手动选位</view>
+    <view class="loc-name">{{target.targetName}}</view>
+    <view class="loc-code">{{target.targetCode}}</view>
+    <view class="tag-row">
+      <text class="tag tag-green">好箱</text>
+      <text class="tag tag-green" wx:if="{{workTypeLabel}}">{{workTypeLabel}}</text>
+      <text class="tag tag-blue" wx:if="{{cntrSize}}">{{cntrSize}}</text>
     </view>
+
+    <view class="field">
+      <view class="field-label">作业机械</view>
+      <picker wx:if="{{equipmentOptions.length}}" range="{{equipmentOptions}}" value="{{equipmentIndex}}" bindchange="onEquipmentChange">
+        <view class="field-value">{{equipmentOptions[equipmentIndex]}} ›</view>
+      </picker>
+      <view wx:else class="field-value muted">正在读取堆场机械…</view>
+    </view>
+    <view class="field">
+      <view class="field-label">作业类型</view>
+      <picker range="{{workTypeOptions}}" range-key="label" value="{{workTypeIndex}}" bindchange="onWorkTypeChange">
+        <view class="field-value">{{workTypeOptions[workTypeIndex].label}} ›</view>
+      </picker>
+    </view>
+    <view class="field">
+      <view class="field-label">船公司</view>
+      <picker wx:if="{{carrierOptions.length}}" range="{{carrierOptions}}" value="{{carrierIndex}}" bindchange="onCarrierChange">
+        <view class="field-value">{{carrierOptions[carrierIndex]}} ›</view>
+      </picker>
+      <view wx:else class="field-value muted">正在读取在场船公司…</view>
+    </view>
+
+    <view class="field" wx:if="{{needCntrNo}}">
+      <view class="field-label">箱号（可选）</view>
+      <view class="cntr-row">
+        <input class="cntr-input" placeholder="选填，填写后可反查贝位" value="{{cntrNo}}" bindinput="onCntrInput" />
+        <view class="cntr-btn {{lookingUp ? 'disabled' : ''}}" bindtap="lookupCntr">查询</view>
+      </view>
+      <view class="cntr-hint" wx:if="{{cntrHint}}">{{cntrHint}}</view>
+    </view>
+
+    <view class="meta-row">
+      <view><text>场区</text>{{target.blockName || '--'}}</view>
+      <view><text>贝位</text>{{target.slot || '--'}}</view>
+      <view><text>到达</text>{{target.arrivalRadiusM || 15}} 米</view>
+    </view>
+
+    <view class="ready-bar">车辆停稳后获取定位并开始导航</view>
   </view>
 
-  <view class="notice-card">
-    <view class="notice-title">开始前请确认</view>
-    <view class="notice-item">· 手机定位服务已开启</view>
-    <view class="notice-item">· 导航期间尽量保持小程序在前台</view>
-    <view class="notice-item">· 实际通行以现场标识和指挥为准</view>
-  </view>
+  <button class="start-btn" loading="{{starting}}" disabled="{{starting}}" bindtap="startNavigation">开始导航</button>
+  <button class="secondary-button back-button" bindtap="goBack">重新选择箱区</button>
 
-  <button class="primary-button" loading="{{starting}}" disabled="{{starting}}" bindtap="startNavigation">获取定位并开始导航</button>
-  <button class="secondary-button back-button" bindtap="goBack">重新选择</button>
+  <view class="steps">
+    <view class="step active"><text class="n">1</text>任务确认</view>
+    <view class="step-line"></view>
+    <view class="step"><text class="n">2</text>场内导航</view>
+    <view class="step-line"></view>
+    <view class="step"><text class="n">3</text>到位作业</view>
+  </view>
 </view>

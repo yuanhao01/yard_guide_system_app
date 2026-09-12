@@ -1,10 +1,13 @@
 {
   "pages": [
-    "pages/login/index",
+      "pages/login/index",
     "pages/home/index",
     "pages/select-target/index",
     "pages/confirm-target/index",
     "pages/navigation/index",
+    "pages/arrive-confirm/index",
+    "pages/safety-zone/index",
+    "pages/collab-group/index",
     "pages/profile/index"
   ],
   "window": {
@@ -37,7 +40,8 @@
   },
   "requiredPrivateInfos": [
     "getLocation",
-    "startLocationUpdate"
+    "startLocationUpdate",
+    "onLocationChange"
   ],
   "networkTimeout": {
     "request": 15000

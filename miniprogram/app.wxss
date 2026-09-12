@@ -20,14 +20,26 @@ page {
   box-shadow: 0 10rpx 30rpx rgba(22, 56, 42, 0.06);
 }
 
+/* 小程序原生 button 默认有上下内边距，和 line-height 叠在一起会把字顶偏下 */
 .primary-button,
 .secondary-button,
 .danger-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
   height: 92rpx;
+  padding: 0;
   border-radius: 18rpx;
   font-size: 30rpx;
   font-weight: 600;
-  line-height: 92rpx;
+  line-height: 1.2;
+  box-sizing: border-box;
+}
+
+.primary-button::after,
+.secondary-button::after,
+.danger-button::after {
+  border: none;
 }
 
 .primary-button {

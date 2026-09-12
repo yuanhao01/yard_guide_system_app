@@ -1,3 +1,5 @@
 {
-  "navigationBarTitleText": "确认目的地"
+  "navigationBarTitleText": "作业任务确认",
+  "navigationBarBackgroundColor": "#0f2c50",
+  "navigationBarTextStyle": "white"
 }
