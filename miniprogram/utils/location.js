@@ -47,12 +47,12 @@ function startLocationUpdate() {
  * direction：正北 0°，顺时针为正。优先用指南针/已算好的航向，
  * 没有时才用微信 GPS 的 direction（静止时常为 0 或 -1）。
  */
-function toReport(location, headingDeg) {
+function toReport(location, headingDeg, extra) {
   let direction = headingDeg
   if (direction == null || direction < 0 || Number.isNaN(Number(direction))) {
     direction = location.direction < 0 ? null : location.direction
   }
-  return {
+  const payload = {
     longitude: location.longitude,
     latitude: location.latitude,
     accuracy: location.accuracy,
@@ -60,6 +60,8 @@ function toReport(location, headingDeg) {
     direction,
     locationTime: formatLocalDateTime(new Date())
   }
+  if (extra && extra.forceReroute) payload.forceReroute = true
+  return payload
 }
 
 /**

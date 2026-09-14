@@ -14,23 +14,22 @@ function copyTaskFields(session) {
   }
 }
 
-function pickTarget(list, pattern) {
-  const items = list || []
-  return items.find(item => pattern.test(`${item.targetName || ''}${item.targetCode || ''}`)) || items[0]
-}
-
 async function startSpecialNav(options) {
   const purpose = options.purpose
-  const keyword = purpose === 'safety' ? '安全操作区' : '出场'
+  const keywords = purpose === 'safety' ? ['验箱', '安全操作'] : ['出场']
   const pattern = purpose === 'safety'
-    ? /安全操作区|验箱|SAFETY|S-02/i
+    ? /验箱|安全操作|SAFETY|^S\d+/i
     : /出场|出口|门岗|EXIT|GATE/i
-  const results = await request({
-    url: '/navigation/mobile/targets?keyword=' + encodeURIComponent(keyword)
-  })
-  const target = pickTarget(results, pattern)
+  let target
+  for (const keyword of keywords) {
+    const results = await request({
+      url: '/navigation/mobile/targets?keyword=' + encodeURIComponent(keyword)
+    })
+    target = (results || []).find(item => pattern.test(`${item.targetName || ''}${item.targetCode || ''}`))
+    if (target) break
+  }
   if (!target) {
-    throw new Error(purpose === 'safety' ? '尚未配置安全操作区' : '尚未配置出场口')
+    throw new Error(purpose === 'safety' ? '尚未配置验箱区' : '尚未配置出场口')
   }
   const location = await locationUtil.getCurrentLocation()
   const session = await request({

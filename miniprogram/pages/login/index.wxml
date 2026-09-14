@@ -2,16 +2,34 @@
   <view class="brand">
     <view class="brand-mark">场</view>
     <view class="brand-title">堆场引导系统</view>
-    <view class="brand-subtitle">扫码或选择贝位，快速抵达作业位置</view>
+    <view class="brand-subtitle">{{loginKind === 'driver' ? '集卡司机输入车牌并选择堆场即可进场' : '现场岗位使用电脑端账号登录'}}</view>
   </view>
 
   <view class="login-card">
-    <view class="field-label">堆场使用码</view>
-    <input class="field-input" type="text" maxlength="6" placeholder="请输入现场提供的6位使用码" value="{{accessCode}}" bindinput="onAccessCodeInput" />
-    <view class="field-label">车牌号</view>
-    <input class="field-input" maxlength="30" placeholder="例如：辽A12345" value="{{plateNumber}}" bindinput="onPlateNumberInput" bindconfirm="login" />
-    <button class="primary-button login-button" loading="{{submitting}}" disabled="{{submitting}}" bindtap="login">登录</button>
-    <view class="login-tip">无需注册，输入现场提供的使用码即可登录</view>
+    <view class="kind-tabs">
+      <view class="kind-tab {{loginKind === 'driver' ? 'active' : ''}}" data-kind="driver" bindtap="switchKind">集卡司机</view>
+      <view class="kind-tab {{loginKind === 'staff' ? 'active' : ''}}" data-kind="staff" bindtap="switchKind">现场人员</view>
+    </view>
+
+    <block wx:if="{{loginKind === 'driver'}}">
+      <view class="field-label">车牌号</view>
+      <input class="field-input" maxlength="20" placeholder="例如 鲁A12345" value="{{plateNumber}}" bindinput="onPlateInput" />
+      <view class="field-label">堆场</view>
+      <picker mode="selector" range="{{yardNames}}" value="{{yardIndex}}" bindchange="onYardChange">
+        <view class="field-input picker-value {{yardName ? '' : 'placeholder'}}">{{yardName || '请选择堆场'}}</view>
+      </picker>
+      <button class="primary-button login-button" loading="{{submitting}}" disabled="{{submitting}}" bindtap="login">进入堆场</button>
+      <view class="login-tip">不用预先建账号，输入本次作业车牌并选择堆场即可</view>
+    </block>
+
+    <block wx:else>
+      <view class="field-label">账号</view>
+      <input class="field-input" maxlength="40" placeholder="请输入账号" value="{{userAccount}}" bindinput="onAccountInput" />
+      <view class="field-label">密码</view>
+      <input class="field-input" password maxlength="40" placeholder="请输入密码" value="{{password}}" bindinput="onPasswordInput" bindconfirm="login" />
+      <button class="primary-button login-button" loading="{{submitting}}" disabled="{{submitting}}" bindtap="login">登录</button>
+      <view class="login-tip">道口、堆高机、调度账号由现场管理员在电脑端新增</view>
+    </block>
     <view class="privacy-tip">登录即表示同意仅在导航期间使用您的位置信息</view>
   </view>
 </view>

@@ -4,8 +4,10 @@ const auth = require('../../utils/auth')
 Page({
   data: {
     user: {},
-    avatarText: '司',
-    yardName: ''
+    isFieldRole: false,
+    avatarText: '员',
+    yardName: '',
+    accountText: '系统用户'
   },
 
   onShow() {
@@ -14,11 +16,15 @@ Page({
       wx.reLaunch({ url: '/pages/login/index' })
       return
     }
+    const isFieldRole = auth.isFieldRole()
     const yard = (user.accessibleYards || []).find(item => String(item.id) === String(user.currentCyId))
+    const name = user.displayName || user.userName || user.userAccount || '用户'
     this.setData({
       user,
-      avatarText: (user.userName || '司机').slice(0, 1),
-      yardName: yard ? yard.cyName : (user.yardName || '')
+      isFieldRole,
+      avatarText: name.slice(0, 1),
+      yardName: yard ? yard.cyName : (user.yardName || ''),
+      accountText: user.roleLabel || (isFieldRole ? '现场岗位' : (user.driverType === 1 ? '临时司机' : '系统用户'))
     })
   },
 

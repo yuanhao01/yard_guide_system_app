@@ -71,7 +71,10 @@ function createCollabSocket(memberCode, handlers) {
     const userId = state.memberId
       ? 'NAVCOLLAB:id:' + state.memberId
       : 'NAVCOLLAB:' + state.memberCode
-    const url = `${wsBase()}/websocket/${encodeURIComponent(userId)}`
+    const auth = require('./auth')
+    const token = auth.getToken()
+    const tokenQuery = token ? `?satoken=${encodeURIComponent(token)}` : ''
+    const url = `${wsBase()}/websocket/${encodeURIComponent(userId)}${tokenQuery}`
     const task = wx.connectSocket({ url, fail: () => scheduleReconnect() })
     state.task = task
     if (!task) {

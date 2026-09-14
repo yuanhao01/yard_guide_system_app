@@ -50,7 +50,6 @@
       <view class="zoom-btn locate-btn {{locating ? 'locating' : ''}}" bindtap="locateSelf">◎</view>
     </view>
 
-    <view class="heading-debug">{{headingDebug}}</view>
     <view class="map-empty" wx:if="{{mapLoading && !mapError}}">地图加载中…</view>
     <view class="map-empty" wx:if="{{mapError}}">{{mapError}}</view>
   </view>

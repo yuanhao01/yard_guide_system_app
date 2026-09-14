@@ -1,6 +1,5 @@
 /**
  * 手机朝向：正北 0°，顺时针为正。
- * 屏幕上的 headingDebug 和 console [heading] 用同一份快照，用来看传感器到底有没有回调。
  */
 
 let heading = null
@@ -9,7 +8,7 @@ let started = false
 let listenersBound = false
 let platform = ''
 let sdk = ''
-let lastBeta = 50
+let lastBeta = 25
 let lastGamma = 0
 let lastAlpha = null
 let lastMotionAt = 0
@@ -17,6 +16,8 @@ let lastGyroAt = 0
 let lastCompassAt = 0
 let lastCompass = null
 let fused = null
+let headingOffset = null
+let prevMotionH = null
 let lastAccel = { x: 0, y: 0, z: 1 }
 const listeners = []
 
@@ -36,10 +37,7 @@ const debug = {
   device: ''
 }
 
-function log(tag, extra) {
-  const payload = extra == null ? '' : extra
-  console.log('[heading]', tag, payload)
-}
+function log() {}
 
 function normalize(deg) {
   let value = Number(deg)
@@ -128,18 +126,32 @@ function onCompass(res) {
   }
   lastCompassAt = Date.now()
   debug.compass.reason = first ? 'first' : 'ok'
-  // 竖着拿手机导航时，微信 compass 跟拧 Z 轴，不能用来转车头
-  if (phoneInPortrait()) {
-    debug.compass.reason = 'portrait-skip'
-    return
-  }
-  if (!phoneIsFlat()) {
-    debug.compass.reason = 'tilt-skip'
-    return
-  }
-  if (fused == null) fused = dir
-  else fused = lerpAngle(fused, dir, delta > 18 ? 0.55 : 0.28)
-  setFused(fused, 'compass')
+  fuseFromSensors()
+}
+
+/**
+ * 设备顶边在水平面的朝向。平放时退回 alpha；倾斜时用姿态补偿，转手机就会变。
+ */
+function headingFromMotion(alpha, beta, gamma) {
+  if (alpha == null || Number.isNaN(Number(alpha))) return null
+  const tilt = Math.hypot(Number(beta) || 0, Number(gamma) || 0)
+  if (tilt < 8) return normalize(alpha)
+  const toRad = Math.PI / 180
+  const x = (Number(beta) || 0) * toRad
+  const y = (Number(gamma) || 0) * toRad
+  const z = Number(alpha) * toRad
+  const cX = Math.cos(x)
+  const cY = Math.cos(y)
+  const cZ = Math.cos(z)
+  const sX = Math.sin(x)
+  const sY = Math.sin(y)
+  const sZ = Math.sin(z)
+  const vx = -cZ * sY - sZ * sX * cY
+  const vy = -sZ * sY + cZ * sX * cY
+  if (Math.abs(vx) < 1e-6 && Math.abs(vy) < 1e-6) return normalize(alpha)
+  let heading = Math.atan2(vx, vy) * 180 / Math.PI
+  if (heading < 0) heading += 360
+  return normalize(heading)
 }
 
 function onMotion(res) {
@@ -152,25 +164,66 @@ function onMotion(res) {
     lastAlpha = normalize(res.alpha)
     lastMotionAt = Date.now()
   }
-  // 竖屏导航：alpha 是绕重力轴的方位角，水平转手机会变，拧 Z 不会单独骗过 alpha
-  if (phoneInPortrait() && lastAlpha != null) {
-    debug.motion.reason = 'alpha-heading'
-    if (fused == null) publish(lastAlpha, 'motion-a')
-    else setFused(lastAlpha, 'motion-a')
+  fuseFromSensors()
+}
+
+/**
+ * 平放才信指南针（真北）。一倾斜，小米 compass 会随俯仰漂（02=283°、03=232°、04=241°），
+ * 车头不能再跟 compass。倾斜后用姿态角 + 锁定偏置，只改倾斜角时车头不变。
+ */
+function fuseFromSensors() {
+  const motionH = headingFromMotion(lastAlpha, lastBeta, lastGamma)
+  const tilt = tiltFromFlatDeg()
+  const compassOk = lastCompass != null && lastCompassAt && (Date.now() - lastCompassAt < 800)
+  debug.mode = tilt < 22 ? 'flat-compass' : (tilt > 62 ? 'upright-lock' : 'tilt-lock')
+
+  if (motionH != null && prevMotionH != null && headingOffset != null) {
+    const jump = Math.abs(shortestDiff(prevMotionH, motionH))
+    if (jump > 35) {
+      headingOffset = shortestDiff(0, headingOffset + shortestDiff(motionH, prevMotionH))
+      debug.motion.reason = 'alpha-jump ' + round1(jump)
+    }
+  }
+  if (motionH != null) prevMotionH = motionH
+
+  if (tilt < 22 && compassOk) {
+    if (motionH != null) headingOffset = shortestDiff(motionH, lastCompass)
+    debug.motion.reason = 'flat-cmp'
+    setFused(lastCompass, 'compass')
     return
   }
-  debug.motion.reason = 'tilt-only'
+
+  if (motionH == null) {
+    debug.motion.reason = 'no-heading'
+    if (compassOk && tilt < 50) setFused(lastCompass, 'compass')
+    return
+  }
+
+  if (headingOffset == null && lastCompass != null) {
+    headingOffset = shortestDiff(motionH, lastCompass)
+  }
+  const locked = headingOffset == null ? motionH : normalize(motionH + headingOffset)
+  debug.motion.reason = 'lock ' + (headingOffset == null ? '-' : round1(headingOffset))
+  setFused(locked, 'motion-h')
+}
+
+function tiltFromFlatDeg() {
+  return Math.min(90, Math.hypot(lastBeta || 0, lastGamma || 0))
+}
+
+function phoneUpright() {
+  return tiltFromFlatDeg() > 62
 }
 
 function phoneInPortrait() {
-  return Math.abs(lastBeta) > 28 || Math.abs(lastGamma) > 32
+  return phoneUpright()
 }
 
 function phoneIsFlat() {
-  if (phoneInPortrait()) return false
+  if (phoneUpright()) return false
   const n = Math.hypot(lastAccel.x, lastAccel.y, lastAccel.z)
-  if (n >= 0.35) return Math.abs(lastAccel.z) / n > 0.88 && Math.abs(lastBeta) < 18
-  return Math.abs(lastBeta) < 18
+  if (n >= 0.35) return Math.abs(lastAccel.z) / n > 0.82 && tiltFromFlatDeg() < 28
+  return tiltFromFlatDeg() < 28
 }
 
 function gravityYawRate(wx, wy, wz) {
@@ -206,10 +259,9 @@ function onGyro(res) {
     return
   }
   const rateDeg = gravityYawRate(wx, wy, wz) * 180 / Math.PI
-  debug.mode = phoneInPortrait() ? 'portrait-motion' : (phoneIsFlat() ? 'flat-compass' : 'tilt-gyro')
-  if (phoneInPortrait() && lastMotionAt && now - lastMotionAt < 280) {
+  if (lastMotionAt && now - lastMotionAt < 280) {
     debug.gyro.drop += 1
-    debug.gyro.reason = 'motion-a'
+    debug.gyro.reason = 'motion-h'
     return
   }
   if (phoneIsFlat() && lastCompassAt && now - lastCompassAt < 500) {
@@ -383,6 +435,8 @@ function start(opts) {
     lastCompassAt = 0
     lastCompass = null
     fused = null
+    headingOffset = null
+    prevMotionH = null
   }
   if (starting) return
   if (hardwareReady && !options.force) return
@@ -462,12 +516,12 @@ function formatDebug() {
   const hd = debug.heading == null ? null : round1(debug.heading)
   const cmp = c.last == null ? null : round1(c.last)
   const delta = hd != null && cmp != null ? round1(shortestDiff(cmp, hd)) : '-'
-  const portrait = phoneInPortrait()
-  const flat = phoneIsFlat()
-  const mode = portrait ? '竖屏跟motion-α' : (flat ? '平放跟指南针' : '倾斜跟陀螺')
+  const tilt = tiltFromFlatDeg()
+  const mode = tilt < 22 ? '平放跟指南针' : '倾斜锁姿态(不跟指南针漂)'
   return [
     'hd ' + (hd == null ? '空' : hd) + ' src=' + (debug.source || '-') + ' α=' + (lastAlpha == null ? '-' : round1(lastAlpha)),
-    'cmp=' + (cmp == null ? '-' : cmp) + ' Δhd=' + delta + ' ' + mode,
+    'cmp=' + (cmp == null ? '-' : cmp) + ' Δhd=' + delta + ' tilt=' + round1(tilt) + ' off=' + (headingOffset == null ? '-' : round1(headingOffset)),
+    mode,
     'yaw=' + (g.reason || '-') + ' gyrZ=' + (g.last ? String(g.last).replace(/^.*z/, 'z') : '-') + ' gam=' + round1(lastGamma),
     'mot n=' + m.n + ' ' + (m.last || '-') + ' ' + (m.ok || m.fail || '-'),
     'gyr n=' + g.n + ' drop=' + g.drop + ' ' + (g.last || '-'),
@@ -482,6 +536,7 @@ function calibrate() {
   if (value == null) return false
   heading = value
   fused = value
+  if (prevMotionH != null) headingOffset = shortestDiff(prevMotionH, value)
   source = 'calib'
   debug.heading = value
   debug.source = 'calib'

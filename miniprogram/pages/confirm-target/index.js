@@ -194,11 +194,18 @@ Page({
         wx.showToast({ title: error.message, icon: 'none', duration: 2500 })
         return
       }
+      const message = error.message || '无法开始导航'
+      const needSetting = /位置|定位|权限|auth deny/i.test(message)
       wx.showModal({
         title: '无法开始导航',
-        content: error.message,
-        confirmText: '打开设置',
-        success: result => result.confirm && wx.openSetting()
+        content: message,
+        confirmText: needSetting ? '打开设置' : '知道了',
+        showCancel: needSetting,
+        success: result => {
+          if (needSetting && result.confirm) {
+            wx.openSetting()
+          }
+        }
       })
     } finally {
       this.setData({ starting: false })

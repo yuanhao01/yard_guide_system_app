@@ -36,6 +36,9 @@
   "permission": {
     "scope.userLocation": {
       "desc": "用于在堆场内规划路线、判断偏航和确认到达"
+    },
+    "scope.camera": {
+      "desc": "用于在现场协同群拍摄并发送照片"
     }
   },
   "requiredPrivateInfos": [

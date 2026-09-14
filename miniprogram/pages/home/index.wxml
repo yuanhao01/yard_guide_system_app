@@ -1,47 +1,83 @@
 <view class="page home-page">
   <view class="hero">
-    <view class="hero-label">当前堆场</view>
-    <view class="hero-title">{{yardName || '尚未选择堆场'}}</view>
-    <view class="hero-status"><text class="status-dot"></text>导航服务已连接</view>
+    <view class="hero-top">
+      <view>
+        <view class="hero-label">{{isFieldRole ? (roleLabel || '现场岗位') : '当前堆场'}}</view>
+        <view class="hero-title">{{isFieldRole ? (displayName || yardName || '现场岗位') : (yardName || '尚未选择堆场')}}</view>
+      </view>
+      <view class="yard-switch" wx:if="{{canSwitchYard}}" catchtap="chooseYard">
+        <view class="yard-switch-name">{{yardName || '选择堆场'}}</view>
+        <view class="yard-switch-action">切换</view>
+      </view>
+    </view>
+    <view class="hero-status">
+      <text class="status-dot"></text>
+      {{isFieldRole ? ((yardName || '') + (yardName ? ' · ' : '') + '协同服务已连接') : '导航服务已连接'}}
+    </view>
   </view>
 
-  <view wx:if="{{currentSession}}" class="current-card" bindtap="continueNavigation">
-    <view class="current-tag">进行中</view>
-    <view class="current-title">{{currentTitle}}</view>
-    <view class="current-detail">{{currentDetail}}</view>
-    <view class="current-action">{{currentAction}}</view>
-  </view>
+  <block wx:if="{{isFieldRole}}">
+    <view class="section-title">协同交流群</view>
+    <view wx:if="{{!collabGroups.length}}" class="empty-card">
+      <view class="empty-title">暂无进行中的协同任务</view>
+      <view class="empty-desc">司机开始导航后，系统会自动建群并把本岗位拉进去。下拉可刷新。</view>
+    </view>
+    <view
+      wx:for="{{collabGroups}}"
+      wx:key="id"
+      class="collab-card"
+      bindtap="openRoleGroup"
+      data-id="{{item.id}}"
+    >
+      <view class="collab-head">
+        <view class="collab-tag">任务协同</view>
+        <view class="collab-status">进行中</view>
+      </view>
+      <view class="collab-title">{{item.title}}</view>
+      <view class="collab-desc">{{item.desc}}</view>
+      <view class="collab-members">{{item.memberText}}</view>
+    </view>
+  </block>
 
-  <view class="section-title">选择导航方式</view>
-  <view class="action-card" bindtap="selectTarget">
-    <view class="action-icon select-icon">选</view>
-    <view class="action-content">
-      <view class="action-title">手动选择贝位</view>
-      <view class="action-desc">按堆场、场区和贝位逐级选择</view>
+  <block wx:else>
+    <view wx:if="{{currentSession}}" class="current-card" bindtap="continueNavigation">
+      <view class="current-tag">进行中</view>
+      <view class="current-title">{{currentTitle}}</view>
+      <view class="current-detail">{{currentDetail}}</view>
+      <view class="current-action">{{currentAction}}</view>
     </view>
-    <view class="arrow">›</view>
-  </view>
-  <view class="action-card scan-card" bindtap="scanCode">
-    <view class="action-icon">扫</view>
-    <view class="action-content">
-      <view class="action-title">扫一扫导航</view>
-      <view class="action-desc">扫描贝位位置码（作业单 EIR 稍后接入）</view>
+
+    <view class="section-title">选择导航方式</view>
+    <view class="action-card" bindtap="selectTarget">
+      <view class="action-icon select-icon">选</view>
+      <view class="action-content">
+        <view class="action-title">手动选择贝位</view>
+        <view class="action-desc">按堆场、场区和贝位逐级选择</view>
+      </view>
+      <view class="arrow">›</view>
     </view>
-    <view class="arrow">›</view>
-  </view>
+    <view class="action-card scan-card" bindtap="scanCode">
+      <view class="action-icon">扫</view>
+      <view class="action-content">
+        <view class="action-title">扫一扫导航</view>
+        <view class="action-desc">扫描贝位位置码（作业单 EIR 稍后接入）</view>
+      </view>
+      <view class="arrow">›</view>
+    </view>
 
     <view wx:if="{{collabGroup}}" class="collab-card" bindtap="openCollabGroup">
-    <view class="collab-head">
-      <view class="collab-tag">任务协同</view>
-      <view class="collab-status">进行中</view>
+      <view class="collab-head">
+        <view class="collab-tag">任务协同</view>
+        <view class="collab-status">进行中</view>
+      </view>
+      <view class="collab-title">{{collabGroup.title}}</view>
+      <view class="collab-desc">{{collabGroup.desc}}</view>
+      <view class="collab-members">{{collabGroup.memberText}}</view>
     </view>
-    <view class="collab-title">{{collabGroup.title}}</view>
-    <view class="collab-desc">{{collabGroup.desc}}</view>
-    <view class="collab-members">{{collabGroup.memberText}}</view>
-  </view>
 
-  <view class="safety-card">
-    <view class="safety-title">行车安全提示</view>
-    <view class="safety-text">请在停车状态下操作手机。路线仅作场内辅助，请始终服从现场交通标识和人员指挥。</view>
-  </view>
+    <view class="safety-card">
+      <view class="safety-title">行车安全提示</view>
+      <view class="safety-text">请在停车状态下操作手机。路线仅作场内辅助，请始终服从现场交通标识和人员指挥。</view>
+    </view>
+  </block>
 </view>

@@ -42,6 +42,31 @@
   box-shadow: 0 24rpx 80rpx rgba(12, 40, 29, 0.16);
 }
 
+.kind-tabs {
+  display: flex;
+  margin: 0 0 36rpx;
+  padding: 6rpx;
+  border-radius: 18rpx;
+  background: #eef4f1;
+}
+
+.kind-tab {
+  flex: 1;
+  height: 72rpx;
+  border-radius: 14rpx;
+  color: #5d6e67;
+  font-size: 26rpx;
+  font-weight: 600;
+  line-height: 72rpx;
+  text-align: center;
+}
+
+.kind-tab.active {
+  color: #147d55;
+  background: #ffffff;
+  box-shadow: 0 6rpx 16rpx rgba(20, 125, 85, 0.12);
+}
+
 .field-label {
   margin: 8rpx 0 14rpx;
   color: #41534b;
@@ -58,6 +83,14 @@
   border-radius: 16rpx;
   background: #f8faf9;
   font-size: 29rpx;
+}
+
+.picker-value {
+  line-height: 92rpx;
+}
+
+.picker-value.placeholder {
+  color: #9aa8a2;
 }
 
 .login-button {

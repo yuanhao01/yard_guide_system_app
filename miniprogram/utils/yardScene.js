@@ -507,8 +507,7 @@ function createYardScene(canvas, width, height, dpr) {
       let sweep = a1 - a0
       while (sweep > Math.PI) sweep -= Math.PI * 2
       while (sweep < -Math.PI) sweep += Math.PI * 2
-      if (sign > 0 && sweep < 0) sweep += Math.PI * 2
-      if (sign < 0 && sweep > 0) sweep -= Math.PI * 2
+      // 只走劣弧。旧逻辑按转向符号硬加 2π，90° 右转会被画成 270° 绕到黄虚线外侧。
       const steps = Math.max(12, Math.ceil(Math.abs(sweep) * r / 0.28))
       out.push(p1)
       for (let s = 1; s < steps; s += 1) {
@@ -603,67 +602,118 @@ function createYardScene(canvas, width, height, dpr) {
   }
 
   /** 路线偏到行驶方向右侧车道，避开路心黄虚线。 */
+  function unitXZ(from, to) {
+    const v = new THREE.Vector3(to.x - from.x, 0, to.z - from.z)
+    if (v.length() < 1e-4) return null
+    return v.normalize()
+  }
+
+  function rightOf(tan) {
+    return new THREE.Vector3(-tan.z, 0, tan.x)
+  }
+
+  /** 两段偏右车道的交点，直角弯会落在「进段右侧 ∩ 出段右侧」，不会收到路心黄线上。 */
+  function miterLanePoint(pivot, inTan, inOff, outTan, outOff) {
+    const inR = rightOf(inTan)
+    const outR = rightOf(outTan)
+    const ax = pivot.x + inR.x * inOff
+    const az = pivot.z + inR.z * inOff
+    const bx = pivot.x + outR.x * outOff
+    const bz = pivot.z + outR.z * outOff
+    const cross = inTan.x * outTan.z - inTan.z * outTan.x
+    if (Math.abs(cross) < 0.08) {
+      const off = Math.abs(outOff) >= Math.abs(inOff) ? outOff : inOff
+      const r = Math.abs(outOff) >= Math.abs(inOff) ? outR : inR
+      return new THREE.Vector3(pivot.x + r.x * off, pivot.y, pivot.z + r.z * off)
+    }
+    const t = ((bx - ax) * outTan.z - (bz - az) * outTan.x) / cross
+    const miterX = ax + inTan.x * t
+    const miterZ = az + inTan.z * t
+    const maxMiter = Math.max(inOff, outOff, 0) * 2.4 + 1
+    if (Math.hypot(miterX - pivot.x, miterZ - pivot.z) > maxMiter) {
+      return new THREE.Vector3(
+        pivot.x + inR.x * inOff + outR.x * outOff,
+        pivot.y,
+        pivot.z + inR.z * inOff + outR.z * outOff
+      )
+    }
+    return new THREE.Vector3(miterX, pivot.y, miterZ)
+  }
+
   function offsetPolylineRight(points, offsetM) {
     if (!points || points.length < 2 || !offsetM) return points || []
-    const rawOff = []
-    for (let i = 0; i < points.length; i += 1) {
-      rawOff.push(typeof offsetM === 'function' ? Number(offsetM(i, points[i])) || 0 : Number(offsetM) || 0)
-    }
-    for (let i = 1; i < rawOff.length; i += 1) {
-      const delta = rawOff[i] - rawOff[i - 1]
-      if (Math.abs(delta) > 0.5) rawOff[i] = rawOff[i - 1] + (delta > 0 ? 0.5 : -0.5)
+    const n = points.length
+    const segOff = []
+    for (let i = 0; i < n - 1; i += 1) {
+      const mid = new THREE.Vector3(
+        (points[i].x + points[i + 1].x) * 0.5,
+        0,
+        (points[i].z + points[i + 1].z) * 0.5
+      )
+      const off = typeof offsetM === 'function' ? Number(offsetM(i, mid)) || 0 : Number(offsetM) || 0
+      segOff.push(off)
     }
     const out = []
-    for (let i = 0; i < points.length; i += 1) {
-      let tan
-      if (i === 0) tan = points[1].clone().sub(points[0])
-      else if (i === points.length - 1) tan = points[i].clone().sub(points[i - 1])
-      else tan = points[i + 1].clone().sub(points[i - 1])
-      tan.y = 0
-      if (tan.length() < 0.01) {
+    for (let i = 0; i < n; i += 1) {
+      const inTan = i > 0 ? unitXZ(points[i - 1], points[i]) : unitXZ(points[i], points[i + 1])
+      const outTan = i < n - 1 ? unitXZ(points[i], points[i + 1]) : inTan
+      if (!inTan || !outTan) {
         out.push(points[i].clone())
         continue
       }
-      tan.normalize()
-      const off = rawOff[i]
-      if (!off) {
+      const inOff = i > 0 ? segOff[i - 1] : segOff[0]
+      const outOff = i < n - 1 ? segOff[i] : segOff[n - 2]
+      if (!inOff && !outOff) {
         out.push(points[i].clone())
         continue
       }
-      // 右手交通：right = forward × up = (-tz, 0, tx)
-      const right = new THREE.Vector3(-tan.z, 0, tan.x)
-      out.push(new THREE.Vector3(
-        points[i].x + right.x * off,
-        points[i].y,
-        points[i].z + right.z * off
-      ))
+      out.push(miterLanePoint(points[i], inTan, inOff, outTan, outOff))
     }
     return out
   }
 
-  function isOneWayNear(worldPoint) {
+  function projectToRoadPath(worldPoint, path) {
+    let best = null
+    let bestD = Infinity
+    for (let i = 0; i < path.length - 1; i += 1) {
+      const a = toWorld(path[i].longitude, path[i].latitude, 0)
+      const b = toWorld(path[i + 1].longitude, path[i + 1].latitude, 0)
+      const dx = b.x - a.x
+      const dz = b.z - a.z
+      const len2 = dx * dx + dz * dz
+      const t = len2 < 1e-8 ? 0 : Math.max(0, Math.min(1, ((worldPoint.x - a.x) * dx + (worldPoint.z - a.z) * dz) / len2))
+      const on = new THREE.Vector3(a.x + t * dx, 0, a.z + t * dz)
+      const d = Math.hypot(worldPoint.x - on.x, worldPoint.z - on.z)
+      if (d < bestD) {
+        bestD = d
+        const tan = new THREE.Vector3(dx, 0, dz)
+        if (tan.length() > 1e-4) tan.normalize()
+        best = { on, dist: d, tangent: tan, a, b }
+      }
+    }
+    return best
+  }
+
+  function nearestRoadHit(worldPoint, maxDist, twoWayOnly) {
     const roads = (state.map && state.map.roads) || []
     let best = null
-    let bestD = 14
+    let bestD = maxDist == null ? 8 : maxDist
     roads.forEach(road => {
-      const path = road.path || []
-      for (let i = 0; i < path.length - 1; i += 1) {
-        const a = toWorld(path[i].longitude, path[i].latitude, 0)
-        const b = toWorld(path[i + 1].longitude, path[i + 1].latitude, 0)
-        const dx = b.x - a.x
-        const dz = b.z - a.z
-        const len2 = dx * dx + dz * dz
-        const t = len2 < 1e-6 ? 0 : Math.max(0, Math.min(1, ((worldPoint.x - a.x) * dx + (worldPoint.z - a.z) * dz) / len2))
-        const d = Math.hypot(worldPoint.x - (a.x + t * dx), worldPoint.z - (a.z + t * dz))
-        if (d < bestD) {
-          bestD = d
-          best = road
-        }
+      const dir = Number(road.directionType)
+      const oneWay = dir === 1 || dir === 2
+      if (twoWayOnly && oneWay) return
+      const hit = projectToRoadPath(worldPoint, road.path || [])
+      if (hit && hit.dist < bestD) {
+        bestD = hit.dist
+        best = Object.assign({ road, oneWay }, hit)
       }
     })
-    if (!best) return false
-    const dir = Number(best.directionType)
-    return dir === 1 || dir === 2
+    return best
+  }
+
+  function isOneWayNear(worldPoint) {
+    const hit = nearestRoadHit(worldPoint, 7, false)
+    return !!(hit && hit.oneWay)
   }
 
   /** 把 (u, v) 归一化坐标换算成世界坐标，u 沿贝方向、v 沿排方向。 */
@@ -935,14 +985,22 @@ function createYardScene(canvas, width, height, dpr) {
     return points
   }
 
-  /** 丢掉「定位点连到路」的垂直短线，那一段不能当车头，也不能画进场区。 */
+  /**
+   * 丢掉「定位点垂直接上路」或 180° 回头，90° 路口转弯必须留着。
+   * 旧逻辑 dot<0.5 会把东向单行接到东主通道的右转也掐掉，蓝线就会吸到 20m 外的南通道、斜穿空地。
+   */
   function dropLeadStub(points) {
     if (!points || points.length < 3) return points || []
     const ab = points[1].clone().sub(points[0])
     const bc = points[2].clone().sub(points[1])
     ab.y = 0
     bc.y = 0
-    if (ab.length() > 0.8 && bc.length() > 0.8 && ab.normalize().dot(bc.normalize()) < 0.5) {
+    const abLen = ab.length()
+    const bcLen = bc.length()
+    if (abLen < 0.8 || bcLen < 0.8) return points
+    const dot = ab.normalize().dot(bc.normalize())
+    const stubIntoBlock = insideYardBlock(points[0]) && !insideYardBlock(points[1])
+    if (dot < -0.5 || (stubIntoBlock && abLen < 18 && dot < 0.2)) {
       return points.slice(1)
     }
     return points
@@ -983,6 +1041,26 @@ function createYardScene(canvas, width, height, dpr) {
       if (pointInConvex(worldPos, insetRing(ring, 2.2))) return true
     }
     return false
+  }
+
+  /** 丢掉不沿道路的第一段（定位点斜接到旧折线、穿空地的飞线）。 */
+  function dropOffRoadChords(points) {
+    if (!points || points.length < 2 || !state.map || !state.map.roads) return points || []
+    let start = 0
+    while (start < points.length - 1 && chordOffRoad(points[start], points[start + 1])) {
+      start += 1
+    }
+    const trimmed = points.slice(start)
+    return trimmed.length >= 2 ? trimmed : points
+  }
+
+  function chordOffRoad(a, b) {
+    if (!a || !b) return false
+    const hop = a.distanceTo(b)
+    if (hop <= 15) return false
+    const mid = a.clone().lerp(b, 0.5)
+    const snap = nearestRoadSnap(mid)
+    return !snap || snap.dist > 8
   }
 
   /** 蓝线只留马路上的点，掐掉穿进箱区的头尾。 */
@@ -1040,6 +1118,17 @@ function createYardScene(canvas, width, height, dpr) {
     return snap ? snap.pos : gps
   }
 
+  function segmentHitsBlock(a, b) {
+    if (!a || !b) return false
+    const samples = 4
+    for (let i = 1; i < samples; i += 1) {
+      const t = i / samples
+      const p = new THREE.Vector3(a.x + (b.x - a.x) * t, 0, a.z + (b.z - a.z) * t)
+      if (insideYardBlock(p)) return true
+    }
+    return false
+  }
+
   /** 在规划折线上找本车应接入的那一段（含绕场时 C 通道出现两次的情况）。 */
   function pickRouteProgress(points, selfPos) {
     const candidates = []
@@ -1058,12 +1147,20 @@ function createYardScene(canvas, width, height, dpr) {
       if (dist < minDist) minDist = dist
     }
     if (!candidates.length) return null
-    const close = candidates.filter(c => c.dist <= minDist + 18)
-    let chosen = close.reduce((best, c) => (c.dist < best.dist ? c : best), close[0])
     const total = polylineLength(points)
+    // 已经压在某段上（<8m）：用这段。C 与南通道只隔约 20m，18m 容差会把后半圈平行路算进来。
+    const onRoad = candidates.filter(c => c.dist <= Math.max(8, minDist + 3))
+    let chosen = (onRoad.length ? onRoad : candidates.filter(c => c.dist <= minDist + 8))
+      .reduce((best, c) => (c.dist < best.dist ? c : best), candidates[0])
+    const close = candidates.filter(c => c.dist <= Math.max(chosen.dist + 6, 12))
     const rests = close.map(c => c.rest)
     const minR = Math.min(...rests)
     const maxR = Math.max(...rests)
+    // 还在东向单行上、离后半圈平行路 20m：选剩余更长的前半段，蓝线先向东再右转。
+    if (maxR - minR > 80 && chosen.dist > 8) {
+      const earlier = close.reduce((best, c) => (c.rest > best.rest ? c : best), chosen)
+      if (earlier.rest > chosen.rest + 40) chosen = earlier
+    }
     // 绕场一圈：离 01 贝很近时最近投影只剩 1m，但还要走东→南→北→东，应接剩余更长的那段
     if (total > 350 && maxR - minR > 120 && chosen.rest < 120) {
       const wide = candidates.filter(c => c.dist <= Math.max(55, minDist + 22))
@@ -1081,8 +1178,15 @@ function createYardScene(canvas, width, height, dpr) {
     const truck = selfOnRoadPos() || toWorld(state.self.longitude, state.self.latitude, 0)
     const chosen = pickRouteProgress(points, truck)
     if (!chosen) return points
-    const out = [truck.clone()]
-    if (truck.distanceTo(chosen.on) > 0.8) out.push(chosen.on.clone())
+    const gap = truck.distanceTo(chosen.on)
+    const out = []
+    // 斜穿箱区/空地的接入段不画，从折线本身接着走
+    if (gap <= 8 && !segmentHitsBlock(truck, chosen.on)) {
+      out.push(truck.clone())
+      if (gap > 0.8) out.push(chosen.on.clone())
+    } else {
+      out.push(chosen.on.clone())
+    }
     for (let i = chosen.index + 1; i < points.length; i += 1) {
       if (out[out.length - 1].distanceTo(points[i]) > 0.8) out.push(points[i].clone())
     }
@@ -1105,19 +1209,12 @@ function createYardScene(canvas, width, height, dpr) {
         if (dedup[dedup.length - 1].distanceTo(raw[i]) > 0.8) dedup.push(raw[i])
       }
       if (dedup.length < 2) return
-      const onRoad = keepOnRoads(dropLeadStub(simplifyRoutePoints(trimDestinationStub(dedup))))
+      const onRoad = dropOffRoadChords(keepOnRoads(dropLeadStub(simplifyRoutePoints(trimDestinationStub(dedup)))))
       const clipped = clipWorldRouteToSelf(onRoad.length >= 2 ? onRoad : dedup)
-      const offset = offsetPolylineRight(clipped, (idx, point) => {
-        if (idx === 0) return 0
-        const prev = clipped[Math.max(0, idx - 1)]
-        const next = clipped[Math.min(clipped.length - 1, idx + 1)]
-        const a = isOneWayNear(prev)
-        const b = isOneWayNear(point)
-        const c = isOneWayNear(next)
-        if (a === b && b === c) return b ? 0 : 2.3
-        return 0
-      })
-      const smoothed = filletPolyline(offset, 5.5)
+      const offset = offsetPolylineRight(clipped, (idx, mid) => (
+        isOneWayNear(mid) ? 0 : 2.7
+      ))
+      const smoothed = filletPolyline(offset, 3.2)
       const blueW = 0.95
       const routeY = 0.52
       buildRouteRibbon(smoothed, blueW, routeY, 0x1d6fe8, routeGroup)
@@ -1179,7 +1276,7 @@ function createYardScene(canvas, width, height, dpr) {
   function lastRouteApproach() {
     const raw = routeWorldPoints()
     const line = raw.length >= 2
-      ? keepOnRoads(dropLeadStub(raw))
+      ? dropOffRoadChords(keepOnRoads(dropLeadStub(raw)))
       : (state.routeLine || [])
     if (!line || line.length < 2) return new THREE.Vector3(1, 0, 0)
     const a = line[line.length - 2]
@@ -1268,14 +1365,26 @@ function createYardScene(canvas, width, height, dpr) {
     return 0
   }
 
+  function routeForwardAt(pos) {
+    const painted = state.routeLine && state.routeLine.length >= 2 ? state.routeLine : null
+    if (painted) {
+      const forward = remainingForward(painted, pos)
+      if (forward && forward.length() > 0.01) return forward
+    }
+    const raw = routeWorldPoints()
+    if (raw && raw.length >= 2) {
+      const forward = remainingForward(raw, pos)
+      if (forward && forward.length() > 0.01) return forward
+    }
+    return null
+  }
+
   function selfDisplayPose() {
     const gps = toWorld(state.self.longitude, state.self.latitude, 0)
-    const headingDeg = liveHeadingDeg()
-    const heading = (headingDeg * Math.PI) / 180
-    const yaw = yawForTruck(new THREE.Vector3(Math.sin(heading), 0, -Math.cos(heading)))
     const snap = nearestRoadSnap(gps)
-    if (snap) return { pos: snap.pos.clone(), yaw }
-    return { pos: gps, yaw }
+    const pos = snap ? snap.pos.clone() : gps
+    const forward = routeForwardAt(pos) || (snap && snap.tangent) || new THREE.Vector3(0, 0, 1)
+    return { pos, yaw: yawForTruck(forward) }
   }
 
   function ensureSelfTruck() {
@@ -1294,8 +1403,6 @@ function createYardScene(canvas, width, height, dpr) {
       poseSmooth.x = null
       return
     }
-    const headingDeg = liveHeadingDeg()
-    state.self.heading = headingDeg
     const pose = selfDisplayPose()
     const truck = ensureSelfTruck()
     truck.visible = true
@@ -1310,9 +1417,9 @@ function createYardScene(canvas, width, height, dpr) {
       let dyaw = pose.yaw - poseSmooth.yaw
       while (dyaw > Math.PI) dyaw -= Math.PI * 2
       while (dyaw < -Math.PI) dyaw += Math.PI * 2
-      const maxTurn = Math.PI * 2.4 * dt
+      const maxTurn = Math.PI * 4.2 * dt
       if (Math.abs(dyaw) > maxTurn) dyaw = (dyaw > 0 ? 1 : -1) * maxTurn
-      poseSmooth.yaw += dyaw * (Math.abs(dyaw) > 0.2 ? 0.48 : 0.22)
+      poseSmooth.yaw += dyaw * (Math.abs(dyaw) > 0.12 ? 0.72 : 0.42)
       const pdx = pose.pos.x - poseSmooth.x
       const pdz = pose.pos.z - poseSmooth.z
       const pdist = Math.hypot(pdx, pdz)

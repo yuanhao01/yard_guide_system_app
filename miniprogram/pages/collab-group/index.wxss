@@ -101,6 +101,46 @@ page {
   color: #ffffff;
 }
 
+.image-bubble {
+  margin-left: 80rpx;
+  max-width: 420rpx;
+}
+
+.image-mine {
+  margin-left: auto;
+  margin-right: 0;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.chat-image {
+  display: block;
+  width: 420rpx;
+  max-width: 70vw;
+  border-radius: 16rpx;
+  background: #e2e8f0;
+}
+
+.attach {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 72rpx;
+  height: 72rpx;
+  margin-right: 12rpx;
+  border-radius: 50%;
+  color: #1268e8;
+  background: #e8f1fc;
+  font-size: 44rpx;
+  font-weight: 300;
+  line-height: 1;
+}
+
+.attach.disabled {
+  color: #94a3b8;
+  background: #f1f5f9;
+}
+
 .send.disabled {
   background: #a8bdd8;
 }

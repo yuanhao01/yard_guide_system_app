@@ -23,10 +23,27 @@ function isLoggedIn() {
   return Boolean(getToken())
 }
 
+function isFieldRole() {
+  const user = getUser()
+  if (!user) return false
+  if (user.userKind === 'role' || user.userKind === 'staff') {
+    const roleType = Number(user.roleType)
+    return roleType === 1 || roleType === 2 || roleType === 3
+  }
+  return false
+}
+
+function canSwitchYard() {
+  const yards = (getUser() || {}).accessibleYards || []
+  return yards.length > 1
+}
+
 module.exports = {
   clearSession,
   getToken,
   getUser,
+  canSwitchYard,
+  isFieldRole,
   isLoggedIn,
   setSession
 }

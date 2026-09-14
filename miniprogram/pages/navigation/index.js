@@ -36,61 +36,20 @@ function pickRemainingMeters(page, session, route) {
     || (session && session.route && session.route.distanceMeters))
   const painted = page.scene && page.scene.getPaintedRoute && page.scene.getPaintedRoute()
   const paintedRemain = routeInstruction.remainingAlongWorld(painted)
-  if (planned > 500 && along > 150) return along
-  if (paintedRemain > 150 && (along <= 0.5 || paintedRemain >= along * 0.25)) return paintedRemain
-  if (along > 150) return along
-  if (planned > 500 && along < 150) return planned
   const fromSession = Number(session && session.remainingDistanceMeters)
-  if (fromSession > 150) return fromSession
-  if (planned > 0.5) return planned
-  if (along > 0.5) return along
+  // 路外飞线会把 along/planned 撑到数千米，优先用裁掉飞线后的画线长度
+  if (paintedRemain > 8 && (along > paintedRemain * 2.5 || planned > paintedRemain * 2.5)) {
+    return paintedRemain
+  }
+  if (planned > 500 && along > 150 && along < planned * 1.8) return along
+  if (paintedRemain > 150 && (along <= 0.5 || paintedRemain >= along * 0.25)) return paintedRemain
+  if (along > 150 && !(planned > along * 2.5)) return along
+  if (fromSession > 150 && fromSession < 800) return fromSession
   if (paintedRemain > 0.5) return paintedRemain
-  if (fromSession >= 0) return fromSession
+  if (along > 0.5 && !(planned > along * 2.5)) return along
+  if (planned > 0.5 && planned < 800) return planned
+  if (fromSession >= 0 && fromSession < 800) return fromSession
   return 0
-}
-
-function formatPoseDebug(page) {
-  const self = page.self || {}
-  const dest = page.targetPoint
-  const lng = self.longitude != null ? Number(self.longitude).toFixed(6) : '-'
-  const lat = self.latitude != null ? Number(self.latitude).toFixed(6) : '-'
-  const acc = self.accuracy != null ? Math.round(Number(self.accuracy)) : '-'
-  const road = yardScene.nearestRoad(page.yardMapData && page.yardMapData.roads, self)
-  const snapM = page.scene && page.scene.getStatus ? page.scene.getStatus().roadSnapM : null
-  const poseMode = snapM != null && snapM < 48 ? ('road ' + Math.round(snapM) + 'm') : 'gps'
-  let destM = '-'
-  if (dest && dest.longitude != null && self.longitude != null) {
-    const mLon = Math.cos((self.latitude * Math.PI) / 180) * 111320
-    destM = String(Math.round(Math.hypot(
-      (dest.longitude - self.longitude) * mLon,
-      (dest.latitude - self.latitude) * 111320
-    )))
-  }
-  let block = '-'
-  const blocks = (page.yardMapData && page.yardMapData.blocks) || []
-  for (let i = 0; i < blocks.length; i += 1) {
-    const ring = blocks[i] && blocks[i].polygon
-    if (!ring || ring.length < 3 || self.longitude == null) continue
-    let inside = false
-    for (let k = 0, j = ring.length - 1; k < ring.length; j = k, k += 1) {
-      const yi = Number(ring[k].latitude)
-      const yj = Number(ring[j].latitude)
-      const xi = Number(ring[k].longitude)
-      const xj = Number(ring[j].longitude)
-      const hit = ((yi > self.latitude) !== (yj > self.latitude))
-        && (self.longitude < ((xj - xi) * (self.latitude - yi)) / ((yj - yi) || 1e-12) + xi)
-      if (hit) inside = !inside
-    }
-    if (inside) {
-      block = displayAreaText(blocks[i].name || blocks[i].blockName || blocks[i].code || blocks[i].id || '箱区')
-      break
-    }
-  }
-  return [
-    'gps ' + lng + ' ' + lat + ' acc=' + acc,
-    'block=' + block + ' road=' + ((road && (road.edgeName || road.name)) || '-'),
-    'dest=' + destM + 'm remain=' + page.data.remainingDistance + ' pose=' + poseMode
-  ].join('\n')
 }
 
 function estimateMinutes(meters) {
@@ -169,8 +128,7 @@ Page({
     locating: false,
     statusBarHeight: 20,
     flatMode: false,
-    compassRotate: 0,
-    headingDebug: 'heading 等待传感器…'
+    compassRotate: 0
   },
 
   onLoad(options) {
@@ -191,7 +149,6 @@ Page({
     this._spokenDestKey = null
     voice.resetPhase()
     this.initScene().then(() => this.loadSession())
-    this.startHeadingDebug()
   },
 
   onShow() {
@@ -204,7 +161,6 @@ Page({
 
   onUnload() {
     this.ended = true
-    this.stopHeadingDebug()
     this.stopLocationUpdates()
     if (this.offHeading) this.offHeading()
     headingSensor.stop()
@@ -294,7 +250,18 @@ Page({
       this.applySession(session)
       await this.loadYardMap(session.cyId)
       await this.primeLocation()
+      this._forceRerouteOnce = true
       this.startLocationUpdates()
+      if (this.self) {
+        this.lastReportTime = 0
+        await this.handleLocation({
+          longitude: this.self.longitude,
+          latitude: this.self.latitude,
+          accuracy: this.self.accuracy,
+          speed: this.self.speed,
+          direction: this.self.heading
+        })
+      }
     } catch (error) {
       wx.showToast({ title: error.message, icon: 'none' })
     }
@@ -446,11 +413,7 @@ Page({
   calibrateHeading() {
     if (headingSensor.startFromTap) headingSensor.startFromTap()
     else headingSensor.start({ force: true, fromTap: true })
-    const ok = headingSensor.calibrate && headingSensor.calibrate()
-    wx.showToast({
-      title: ok ? '已按当前指南针校准，平放对准北方更准' : '正在开启朝向传感器',
-      icon: 'none'
-    })
+    if (headingSensor.calibrate) headingSensor.calibrate()
   },
 
   onCanvasTouchStart(event) {
@@ -711,31 +674,6 @@ Page({
     wx.stopLocationUpdate()
   },
 
-  startHeadingDebug() {
-    this.stopHeadingDebug()
-    let lastLog = 0
-    const tick = () => {
-      const sensor = headingSensor.formatDebug ? headingSensor.formatDebug() : ''
-      const pose = formatPoseDebug(this)
-      const text = [sensor, pose].filter(Boolean).join('\n')
-      if (text && text !== this.data.headingDebug) this.setData({ headingDebug: text })
-      const now = Date.now()
-      if (now - lastLog < 2000) return
-      lastLog = now
-      if (headingSensor.dump) console.log('[heading-ui]', headingSensor.dump())
-      console.log('[nav-pose]', pose.replace(/\n/g, ' | '))
-    }
-    tick()
-    this._headingDebugTimer = setInterval(tick, 1000)
-  },
-
-  stopHeadingDebug() {
-    if (this._headingDebugTimer) {
-      clearInterval(this._headingDebugTimer)
-      this._headingDebugTimer = null
-    }
-  },
-
   handleCompass(res) {
     if (!res || res.direction == null) return
     this.compassHeading = res.direction
@@ -764,15 +702,34 @@ Page({
     this.reporting = true
     try {
       if (this.ended) return
+      const forceReroute = Boolean(this._forceRerouteOnce)
+      this._forceRerouteOnce = false
+      const displayRoad = yardScene.nearestRoad(this.yardMapData && this.yardMapData.roads, this.self)
+      // 规划必须跟车上看到的点一致：画面用过滤后的 self，不能再拿下一跳原始 GPS
+      const reportLoc = this.self ? {
+        longitude: this.self.longitude,
+        latitude: this.self.latitude,
+        accuracy: location.accuracy,
+        speed: location.speed,
+        direction: location.direction
+      } : location
+      console.log('[nav-plan]', JSON.stringify({
+        raw: [location.longitude, location.latitude, location.accuracy],
+        self: this.self ? [this.self.longitude, this.self.latitude] : null,
+        road: displayRoad ? {
+          name: displayRoad.edgeName || displayRoad.roadName || '',
+          dir: displayRoad.directionType
+        } : null,
+        forceReroute
+      }))
       const response = await request({
         url: `/navigation/mobile/sessions/${this.sessionId}/locations`,
         method: 'POST',
-        data: locationUtil.toReport(location, this.self && this.self.heading)
+        data: locationUtil.toReport(reportLoc, this.self && this.self.heading, { forceReroute })
       })
       if (this.ended) return
       if (response.route) {
         this.applySession(response)
-        wx.showToast({ title: '路线已重新规划', icon: 'none' })
       } else {
         this.applyLocationTick(response)
       }

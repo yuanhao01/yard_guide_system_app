@@ -39,11 +39,54 @@ function describeSession(session) {
   }
 }
 
+function mapGroupCard(group) {
+  const members = group.members || []
+  return {
+    id: group.id,
+    sessionId: group.sessionId,
+    title: group.groupName || group.taskLabel || '现场协同群',
+    desc: group.statusText
+      || (group.onlineCount != null
+        ? `${group.onlineCount}/${group.memberCount || group.onlineCount}人在线`
+        : '点进群聊查看现场成员'),
+    memberText: members.map(item => item.memberName || item.displayName).filter(Boolean).join(' · ')
+  }
+}
+
+function syncHomeTab(isFieldRole) {
+  wx.setTabBarItem({
+    index: 0,
+    text: isFieldRole ? '协同' : '导航'
+  })
+}
+
+function applyUserContext(page) {
+  const user = auth.getUser() || {}
+  const yards = user.accessibleYards || []
+  const yard = yards.find(item => String(item.id) === String(user.currentCyId))
+  const isFieldRole = auth.isFieldRole()
+  syncHomeTab(isFieldRole)
+  page.setData({
+    isFieldRole,
+    canSwitchYard: yards.length > 1,
+    yards,
+    yardName: (yard && yard.cyName) || user.yardName || '',
+    roleLabel: user.roleLabel || '',
+    displayName: user.displayName || user.userName || user.userAccount || ''
+  })
+}
+
 Page({
   data: {
+    isFieldRole: false,
+    canSwitchYard: false,
+    yards: [],
+    roleLabel: '',
+    displayName: '',
     yardName: '',
     currentSession: null,
     collabGroup: null,
+    collabGroups: [],
     currentTitle: '',
     currentDetail: '',
     currentAction: ''
@@ -54,6 +97,7 @@ Page({
       wx.reLaunch({ url: '/pages/login/index' })
       return
     }
+    applyUserContext(this)
     this.refresh()
   },
 
@@ -62,9 +106,64 @@ Page({
   },
 
   async refresh() {
-    const user = auth.getUser() || {}
-    const yard = (user.accessibleYards || []).find(item => String(item.id) === String(user.currentCyId))
-    this.setData({ yardName: yard ? yard.cyName : (user.yardName || '') })
+    if (this.data.isFieldRole || auth.isFieldRole()) {
+      await this.refreshRoleHome()
+      return
+    }
+    await this.refreshDriverHome()
+  },
+
+  async refreshRoleHome() {
+    applyUserContext(this)
+    this.setData({
+      currentSession: null,
+      collabGroup: null,
+      currentTitle: '',
+      currentDetail: '',
+      currentAction: ''
+    })
+    try {
+      const groups = await request({ url: '/navigation/mobile/collab/my-groups' })
+      this.setData({
+        collabGroups: (groups || []).map(mapGroupCard)
+      })
+    } catch (error) {
+      this.setData({ collabGroups: [] })
+      wx.showToast({ title: error.message, icon: 'none' })
+    }
+  },
+
+  chooseYard() {
+    const yards = this.data.yards || []
+    if (yards.length < 2) return
+    wx.showActionSheet({
+      itemList: yards.map(item => item.cyName || String(item.id)),
+      success: async result => {
+        const yard = yards[result.tapIndex]
+        if (!yard || String(yard.id) === String((auth.getUser() || {}).currentCyId)) return
+        try {
+          wx.showLoading({ title: '切换中' })
+          const user = await request({
+            url: '/navigation/auth/switch-yard',
+            method: 'POST',
+            data: { cyId: yard.id }
+          })
+          const token = user.token || auth.getToken()
+          auth.setSession(Object.assign({}, auth.getUser(), user, { token }))
+          getApp().globalData.user = auth.getUser()
+          applyUserContext(this)
+          await this.refresh()
+        } catch (error) {
+          wx.showToast({ title: error.message || '切换失败', icon: 'none' })
+        } finally {
+          wx.hideLoading()
+        }
+      }
+    })
+  },
+
+  async refreshDriverHome() {
+    applyUserContext(this)
     try {
       const currentSession = await request({ url: '/navigation/mobile/sessions/current' })
       let collabGroup = null
@@ -75,16 +174,8 @@ Page({
           const group = await request({
             url: `/navigation/mobile/sessions/${currentSession.jobSessionId || currentSession.id}/collab`
           })
-          const members = group.members || []
-          collabGroup = {
-            title: group.groupName || `现场协同 · ${currentSession.workTypeLabel || currentSession.targetName || '作业任务'}`,
-            desc: group.statusText
-              || (group.onlineCount != null
-                ? `${group.onlineCount}/${group.memberCount || group.onlineCount}人在线`
-                : '点进群聊查看现场成员'),
-            memberText: members.map(item => item.memberName || item.displayName).filter(Boolean).join(' · '),
-            sessionId: group.sessionId || currentSession.jobSessionId || currentSession.id
-          }
+          collabGroup = mapGroupCard(group)
+          collabGroup.sessionId = group.sessionId || currentSession.jobSessionId || currentSession.id
         } catch (error) {
           collabGroup = null
         }
@@ -92,12 +183,14 @@ Page({
       this.setData({
         currentSession,
         collabGroup,
+        collabGroups: [],
         ...describeSession(currentSession)
       })
     } catch (error) {
       this.setData({
         currentSession: null,
         collabGroup: null,
+        collabGroups: [],
         currentTitle: '',
         currentDetail: '',
         currentAction: ''
@@ -107,6 +200,7 @@ Page({
   },
 
   scanCode() {
+    if (this.data.isFieldRole) return
     if (this.data.currentSession) {
       this.continueNavigation()
       return
@@ -132,6 +226,7 @@ Page({
   },
 
   selectTarget() {
+    if (this.data.isFieldRole) return
     if (this.data.currentSession) {
       this.continueNavigation()
       return
@@ -180,13 +275,24 @@ Page({
   },
 
   openCollabGroup() {
-    const session = this.data.currentSession
     const group = this.data.collabGroup
-    if (!session || !group) {
+    if (!group) {
       wx.showToast({ title: '暂无进行中的任务', icon: 'none' })
       return
     }
-    wx.navigateTo({ url: `/pages/collab-group/index?sessionId=${group.sessionId}` })
+    const query = group.id
+      ? `groupId=${group.id}`
+      : `sessionId=${group.sessionId}`
+    wx.navigateTo({ url: `/pages/collab-group/index?${query}` })
+  },
+
+  openRoleGroup(event) {
+    const groupId = event.currentTarget.dataset.id
+    if (!groupId) {
+      wx.showToast({ title: '协同群不存在', icon: 'none' })
+      return
+    }
+    wx.navigateTo({ url: `/pages/collab-group/index?groupId=${groupId}` })
   },
 
   openConfirmation(target, sourceType) {

@@ -2,15 +2,17 @@
   <view class="profile-card">
     <view class="avatar">{{avatarText}}</view>
     <view>
-      <view class="user-name">{{user.userName || '司机'}}</view>
-      <view class="user-account">{{user.driverType === 1 ? '临时司机' : '系统用户'}}</view>
+      <view class="user-name">{{user.displayName || user.userName || '用户'}}</view>
+      <view class="user-account">{{accountText}}</view>
     </view>
   </view>
 
   <view class="card info-card">
     <view class="info-row"><text>当前堆场</text><text>{{yardName || '--'}}</text></view>
-    <view class="info-row"><text>车牌号</text><text>{{user.plateNumber || '--'}}</text></view>
-    <view class="info-row"><text>定位用途</text><text>仅导航期间</text></view>
+    <view class="info-row"><text>登录账号</text><text>{{user.userAccount || user.roleCode || '--'}}</text></view>
+    <view class="info-row" wx:if="{{user.roleLabel}}"><text>当前岗位</text><text>{{user.roleLabel}}</text></view>
+    <view class="info-row" wx:if="{{user.plateNumber}}"><text>车牌号</text><text>{{user.plateNumber}}</text></view>
+    <view class="info-row"><text>定位用途</text><text>{{isFieldRole ? '岗位登录不采集定位' : '仅导航期间'}}</text></view>
     <view class="info-row" bindtap="openSettings"><text>系统权限设置</text><text class="arrow">›</text></view>
   </view>
 

@@ -11,8 +11,12 @@ function getDeviceId() {
   return deviceId
 }
 
+function isPublicAuth(url) {
+  return /^\/navigation\/auth\/(yards|driver-login|role-login|login)(\?|$)/.test(url || '')
+}
+
 function request(options) {
-  const token = auth.getToken()
+  const token = options.skipAuth || isPublicAuth(options.url) ? '' : auth.getToken()
   return new Promise((resolve, reject) => {
     wx.request({
       url: `${config.apiBaseUrl}${options.url}`,
@@ -27,7 +31,8 @@ function request(options) {
       timeout: 15000,
       success(response) {
         const body = response.data || {}
-        if (response.statusCode === 401 || body.code === 401) {
+        const tokenMissing = /有效\s*token/i.test(String(body.msg || ''))
+        if (response.statusCode === 401 || body.code === 401 || tokenMissing) {
           if (!options.skipUnauthorizedRedirect) {
             auth.clearSession()
             wx.reLaunch({ url: '/pages/login/index' })

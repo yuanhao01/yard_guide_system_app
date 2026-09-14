@@ -7,7 +7,7 @@
         <view class="sub">{{taskLabel || '作业任务'}}</view>
       </view>
       <view class="online">
-        <text class="online-dot {{dissolved || !connected ? 'off' : ''}}"></text>{{dissolved ? statusText : (onlineCount + '/' + memberCount + '人在线')}}
+        <text class="online-dot {{dissolved || !connected ? 'off' : ''}}"></text>{{dissolved ? statusText : ((connected ? '' : '补拉 · ') + onlineCount + '/' + memberCount + '人在线')}}
       </view>
     </view>
   </view>
@@ -33,6 +33,16 @@
           <text>{{item.text}}</text>
         </view>
 
+        <view wx:if="{{item.type === 'image'}}" class="image-bubble {{item.self ? 'image-mine' : ''}}">
+          <image
+            class="chat-image"
+            src="{{item.imageUrl}}"
+            mode="widthFix"
+            bindtap="previewImage"
+            data-url="{{item.imageUrl}}"
+          />
+        </view>
+
         <view wx:if="{{item.type === 'machine'}}" class="machine-card">
           <view class="machine-title">堆高机动态</view>
           <view class="machine-eta">预计 <text class="machine-num">{{item.etaMin}}</text> 分钟到达</view>
@@ -46,12 +56,16 @@
 
   <view class="composer">
     <view class="quick-row">
-      <view class="quick q-blue" bindtap="sendQuick" data-text="已确认位置，正在前往">📍 确认位置</view>
-      <view class="quick q-orange" bindtap="sendQuick" data-text="预计 3 分钟到达作业点">⏱ 预计到达</view>
-      <view class="quick q-green" bindtap="sendQuick" data-text="已出发，请堆高机留意">▶ 已出发</view>
-      <view class="quick q-cyan" bindtap="sendQuick" data-text="已到位，等待指挥">✓ 已到位</view>
+      <view
+        class="quick {{index === 0 ? 'q-blue' : (index === 1 ? 'q-orange' : (index === 2 ? 'q-green' : 'q-cyan'))}}"
+        wx:for="{{quickReplies}}"
+        wx:key="text"
+        bindtap="sendQuick"
+        data-text="{{item.text}}"
+      >{{item.label}}</view>
     </view>
     <view class="input-row">
+      <view class="attach {{sending || dissolved ? 'disabled' : ''}}" bindtap="chooseImageSource">＋</view>
       <input class="input" placeholder="{{dissolved ? '协同群已解散' : '回复群消息…'}}" disabled="{{dissolved}}" value="{{draft}}" bindinput="onDraft" confirm-type="send" bindconfirm="sendDraft" />
       <view class="send {{sending || dissolved ? 'disabled' : ''}}" bindtap="sendDraft">发送</view>
     </view>
