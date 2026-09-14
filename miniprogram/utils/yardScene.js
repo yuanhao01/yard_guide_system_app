@@ -92,17 +92,27 @@ function createYardScene(canvas, width, height, dpr) {
   renderer.setClearColor(0xe4e9ef, 1)
   // 小程序 WebGL 开阴影 + 大量 Mesh 容易卡死主线程，关闭阴影保流畅
   renderer.shadowMap.enabled = false
+  // 贴图按 sRGB 采样后必须在输出端转回去，否则烘焙贴图整体发灰发暗
+  if (THREE.sRGBEncoding != null) renderer.outputEncoding = THREE.sRGBEncoding
 
   const scene = new THREE.Scene()
   scene.fog = new THREE.Fog(0xe4e9ef, 620, 1700)
 
   const camera = new THREE.PerspectiveCamera(48, width / height, 0.2, 4000)
 
-  const hemi = new THREE.HemisphereLight(0xffffff, 0xb4bcc6, 1.05)
+  // 环境光压低、主光提高：明暗对比拉开，模型才有体积感
+  const hemi = new THREE.HemisphereLight(0xdfe8f2, 0x9aa3ad, 0.72)
   scene.add(hemi)
-  const sun = new THREE.DirectionalLight(0xfff4e6, 0.62)
+  const sun = new THREE.DirectionalLight(0xfff2df, 0.95)
   sun.position.set(140, 240, 90)
   scene.add(sun)
+  // 逆光补一盏弱光，避免背面死黑
+  const fill = new THREE.DirectionalLight(0xcfe0f5, 0.28)
+  fill.position.set(-120, 90, -140)
+  scene.add(fill)
+
+  /** 传给 vehicleLoader 的材质选项：canvas 用来解码 GLB 内嵌贴图 */
+  const materialOpts = { canvas }
 
   const root = new THREE.Group()
   scene.add(root)
@@ -123,11 +133,15 @@ function createYardScene(canvas, width, height, dpr) {
   root.add(dynamicGroup)
   // 本车单独挂，指南针刷新只改位置/航向，不要拆掉重建
   let selfTruck = null
+  // 道口属静态场景，但 GLB 晚于建图就绪，留个引用便于就绪后单独补挂
+  let crossing = null
 
   const state = {
     width,
     height,
     map: null,
+    // 场区包围盒，建图时算出，道口等按场区边缘定位的物体要用
+    bounds: null,
     route: [],
     target: null,
     targetLabel: '',
@@ -342,7 +356,13 @@ function createYardScene(canvas, width, height, dpr) {
     return [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t]
   }
 
-  const CNTR_COLORS = [0x1e3a8a, 0xb42318, 0xf4f4f5, 0xdb2777, 0x1d4ed8, 0x111827, 0x0e7490, 0x365314]
+  /* 船公司常见箱色。这是当作固有色用的，亮度得比 UI 取色高一档：
+     打光衰减后还要再暗一截，背光面尤其明显，
+     照搬 Tailwind 那套深色系会整片糊成黑的。 */
+  const CNTR_COLORS = [
+    0x2f6fb5, 0xc0392b, 0xe9e9e4, 0xd9772b,
+    0x2f7d55, 0x1a8fa8, 0x8c95a0, 0xb8873a
+  ]
 
   function stackColor(stack) {
     const key = `${(stack && stack.cntrNo) || ''}|${(stack && stack.slot) || ''}|${(stack && stack.rowIndex) || ''}`
@@ -749,7 +769,7 @@ function createYardScene(canvas, width, height, dpr) {
 
   function addIsoContainer(center, yaw, alongU, alongV, layerH, floor, forty, color) {
     const template = state.containerTemplates && (forty ? state.containerTemplates.c40 : state.containerTemplates.c20)
-    const model = template && vehicleLoader.instantiateTemplate(THREE, template, color)
+    const model = template && vehicleLoader.instantiateTemplate(THREE, template, color, materialOpts)
     const y = 0.2 + layerH * (floor + 0.5) + floor * 0.04
     if (model) {
       const nativeL = forty ? 12.192 : 6.058
@@ -938,9 +958,11 @@ function createYardScene(canvas, width, height, dpr) {
     const bounds = yardBounds(map)
     if (!bounds) return
     setOriginFromBounds(bounds)
+    state.bounds = bounds
     buildPavement()
     buildRoads(map.roads)
     buildBlocksClean(map.blocks, state.targetBlockId, state.targetSlot)
+    buildCrossing()
     // 原点刚定下来，路线/车模必须按新原点重算，否则会飞到场外看不见
     rebuildRoute()
     rebuildDynamic()
@@ -1247,7 +1269,10 @@ function createYardScene(canvas, width, height, dpr) {
   }
 
   function buildSelfTruck(origin, yaw) {
-    const truck = vehicleLoader.instantiate(THREE, vehicleLoader.getTruckParts())
+    // GLB 还没解析完就先不画，onModelReady 会回来补
+    const parts = vehicleLoader.getTruckParts()
+    if (!parts || !parts.length) return null
+    const truck = vehicleLoader.instantiate(THREE, parts, materialOpts)
     truck.traverse(child => {
       child.frustumCulled = false
       if (child.isMesh) child.renderOrder = 6
@@ -1257,8 +1282,32 @@ function createYardScene(canvas, width, height, dpr) {
     return truck
   }
 
+  /**
+   * 进出场道口。暂时摆在场区包围盒的东南角（俯视图右下），
+   * 等拿到闸口的真实坐标再按数据定位。
+   */
+  function buildCrossing() {
+    if (crossing) {
+      mapGroup.remove(crossing)
+      disposeObject(crossing)
+      crossing = null
+    }
+    const parts = vehicleLoader.getCrossingParts()
+    if (!parts || !parts.length || !state.bounds) return
+    const model = vehicleLoader.instantiate(THREE, parts, materialOpts)
+    const corner = toWorld(state.bounds.maxLng, state.bounds.minLat, 0)
+    model.position.set(corner.x, 0, corner.z)
+    model.traverse(child => {
+      if (child.isMesh) child.renderOrder = 2
+    })
+    crossing = model
+    mapGroup.add(model)
+  }
+
   function buildStacker(origin, yaw) {
-    const model = vehicleLoader.instantiate(THREE, vehicleLoader.getStackerParts())
+    const parts = vehicleLoader.getStackerParts()
+    if (!parts || !parts.length) return null
+    const model = vehicleLoader.instantiate(THREE, parts, materialOpts)
     model.position.set(origin.x, 0, origin.z)
     model.rotation.y = -yaw
     return model
@@ -1389,7 +1438,9 @@ function createYardScene(canvas, width, height, dpr) {
 
   function ensureSelfTruck() {
     if (selfTruck) return selfTruck
-    selfTruck = buildSelfTruck(new THREE.Vector3(0, 0, 0), 0)
+    const truck = buildSelfTruck(new THREE.Vector3(0, 0, 0), 0)
+    if (!truck) return null
+    selfTruck = truck
     selfTruck.visible = false
     root.add(selfTruck)
     return selfTruck
@@ -1405,6 +1456,7 @@ function createYardScene(canvas, width, height, dpr) {
     }
     const pose = selfDisplayPose()
     const truck = ensureSelfTruck()
+    if (!truck) return
     truck.visible = true
     const now = Date.now()
     const dt = poseSmooth.at ? Math.min(0.08, (now - poseSmooth.at) / 1000) : 0.016
@@ -1459,30 +1511,18 @@ function createYardScene(canvas, width, height, dpr) {
       pin.userData.scaleWithView = true
       pin.userData.baseScale = { x: 1, y: 1, z: 1 }
       dynamicGroup.add(pin)
-      if (state.targetLabel) {
+      // 验箱只认场区上的 S 区标签，终点不再叠绿框/写死「验箱区 S-02」
+      if (state.targetLabel && state.purpose !== 'safety') {
         const tag = makeTextSprite(state.targetLabel, '#166534', { scaleX: 12, scaleY: 3 })
         if (tag) {
           tag.position.set(dest.x, 5.2, dest.z)
           dynamicGroup.add(tag)
         }
       }
-      if (state.purpose === 'safety' || /出场|出口|EXIT|安全操作区|验箱|S-02/i.test(state.targetLabel || '')) {
-        const inspect = state.purpose === 'safety' || /安全操作区|验箱|S-02/i.test(state.targetLabel || '')
-        const pad = makeUnlitBox(inspect ? 32 : 16, 0.14, inspect ? 24 : 12, inspect ? 0x86efac : 0x4ade80)
+      if (state.purpose === 'exit' || /出场|出口|EXIT/i.test(state.targetLabel || '')) {
+        const pad = makeUnlitBox(16, 0.14, 12, 0x4ade80)
         pad.position.set(dest.x, 0.3, dest.z)
         dynamicGroup.add(pad)
-        if (inspect) {
-          ;[-1, 0, 1].forEach(i => {
-            const bay = makeUnlitBox(3.4, 0.05, 16, 0xbbf7d0)
-            bay.position.set(dest.x + i * 6.2, 0.36, dest.z)
-            dynamicGroup.add(bay)
-          })
-          const tag = makeTextSprite('验箱区 S-02', '#166534', { scaleX: 16, scaleY: 3.2 })
-          if (tag) {
-            tag.position.set(dest.x, 6.2, dest.z)
-            dynamicGroup.add(tag)
-          }
-        }
       }
     }
     if (state.self && state.purpose === 'job' && destPoint()) {
@@ -1869,8 +1909,36 @@ function createYardScene(canvas, width, height, dpr) {
     }
   }
 
+  /**
+   * models/*.glb 解析要几十毫秒，不能挡在启动路径上，
+   * 因此先建场景，模型就绪后再各自补挂。
+   */
+  const offModelReady = vehicleLoader.onModelReady(name => {
+    if (name === 'truck') {
+      if (selfTruck) {
+        root.remove(selfTruck)
+        disposeObject(selfTruck)
+        selfTruck = null
+      }
+      applySelfPose()
+    } else if (name === 'container20' || name === 'container40') {
+      state.containerTemplates = {
+        c20: vehicleLoader.createTemplate(THREE, vehicleLoader.getContainerParts(20)),
+        c40: vehicleLoader.createTemplate(THREE, vehicleLoader.getContainerParts(40))
+      }
+      rebuildDynamic()
+    } else if (name === 'crossing') {
+      buildCrossing()
+    } else {
+      rebuildDynamic()
+    }
+    state.dirty = true
+  })
+  vehicleLoader.preload()
+
   function dispose() {
     state.running = false
+    offModelReady()
     if (selfTruck) {
       root.remove(selfTruck)
       disposeObject(selfTruck)

@@ -226,6 +226,8 @@ INSERT INTO t_navigation_qrcode(id,qr_token,target_id,status,expire_time,scan_co
 (90017017,'QDTEST-A09',90015017,0,NULL,0,NULL,'seed',NOW(6),'seed',NOW(6),0),
 (90017018,'QDTEST-A11',90015018,0,NULL,0,NULL,'seed',NOW(6),'seed',NOW(6),0);
 INSERT INTO t_navigation_target(id,cy_id,block_id,slot,target_code,target_name,road_node_id,entry_longitude,entry_latitude,arrival_radius_m,status,remark,create_user,create_time,update_user,update_time,del_flag) VALUES (90015999,9001,'QDTEST-C','00','QDTEST-EXIT','出场口',90011002,120.38395563,36.06333462,20.00,0,'出场导航终点','seed',NOW(6),'seed',NOW(6),0);
+-- 验箱区示例：名称含「验箱」，绑场区+贝位，入口坐标由导航规划时吸附到道路
+INSERT INTO t_navigation_target(id,cy_id,block_id,slot,target_code,target_name,road_node_id,entry_longitude,entry_latitude,arrival_radius_m,status,remark,create_user,create_time,update_user,update_time,del_flag) VALUES (90015998,9001,'QDTEST-C','02','QDTEST-SAFETY','C区 · 验箱区',0,NULL,NULL,15.00,0,'验箱导航终点，靠路由规划吸附到对应道路','seed',NOW(6),'seed',NOW(6),0);
 INSERT INTO t_navigation_qrcode(id,qr_token,target_id,status,expire_time,scan_count,last_scan_time,create_user,create_time,update_user,update_time,del_flag) VALUES (90017999,'QDTEST-EXIT',90015999,0,NULL,0,NULL,'seed',NOW(6),'seed',NOW(6),0);
 INSERT INTO t_yard_cntr_info(id,cntr_no,cntr_size,cntr_type,carrier_id,cntr_position,floor_num,cntr_position_id,cntr_status,cy_id,carrier_code,area_no,bay_no,create_time,create_user,update_time,update_user) VALUES
 ('9001CNTR0001','MSKU1234567','40HC','GP',NULL,'C-02',1,NULL,1,9001,'MSC','C','02',NOW(6),'seed',NOW(6),'seed'),

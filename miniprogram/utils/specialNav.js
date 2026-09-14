@@ -14,23 +14,24 @@ function copyTaskFields(session) {
   }
 }
 
-async function startSpecialNav(options) {
-  const purpose = options.purpose
-  const keywords = purpose === 'safety' ? ['验箱', '安全操作'] : ['出场']
-  const pattern = purpose === 'safety'
-    ? /验箱|安全操作|SAFETY|^S\d+/i
-    : /出场|出口|门岗|EXIT|GATE/i
-  let target
-  for (const keyword of keywords) {
-    const results = await request({
-      url: '/navigation/mobile/targets?keyword=' + encodeURIComponent(keyword)
-    })
-    target = (results || []).find(item => pattern.test(`${item.targetName || ''}${item.targetCode || ''}`))
-    if (target) break
-  }
-  if (!target) {
+async function resolveConfiguredTarget(purpose, task) {
+  const yardId = task && task.cyId
+  if (!yardId) {
     throw new Error(purpose === 'safety' ? '尚未配置验箱区' : '尚未配置出场口')
   }
+  const path = purpose === 'safety' ? 'safety-target' : 'exit-target'
+  const target = await request({
+    url: `/navigation/mobile/${path}?yardId=${yardId}`
+  })
+  if (!target || !target.id) {
+    throw new Error(purpose === 'safety' ? '尚未配置验箱区' : '尚未配置出场口')
+  }
+  return target
+}
+
+async function startSpecialNav(options) {
+  const purpose = options.purpose
+  const target = await resolveConfiguredTarget(purpose, options.task || options)
   const location = await locationUtil.getCurrentLocation()
   const session = await request({
     url: '/navigation/mobile/sessions',

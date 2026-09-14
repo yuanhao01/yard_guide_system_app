@@ -167,7 +167,12 @@ Page({
       this.targetPoint = (route && route.target) || this.routePoints[this.routePoints.length - 1]
       this.scene.setMap(this.yardMapData)
       this.scene.setRoute(this.routePoints)
-      this.scene.setTarget(this.targetPoint, this.session.targetName)
+      this.scene.setTarget(
+        this.targetPoint,
+        this.session.targetName,
+        this.session.targetBlockId,
+        this.session.targetSlot
+      )
       if (this.scene.setPurpose) this.scene.setPurpose('safety')
       if (this.scene.enableFollow) this.scene.enableFollow()
       this.setData({

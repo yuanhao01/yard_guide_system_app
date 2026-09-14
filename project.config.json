@@ -50,6 +50,10 @@
         "type": "file"
       },
       {
+        "value": "miniprogram/models/crossing.glb",
+        "type": "file"
+      },
+      {
         "value": "models/truck.glb",
         "type": "file"
       },
@@ -63,6 +67,10 @@
       },
       {
         "value": "models/container40.glb",
+        "type": "file"
+      },
+      {
+        "value": "models/crossing.glb",
         "type": "file"
       }
     ]

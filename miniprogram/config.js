@@ -5,6 +5,16 @@
 module.exports = {
   apiBaseUrl: 'http://117.72.38.68/guide',
   wsBaseUrl: 'ws://117.72.38.68/guide',
+
+  /**
+   * 高精度模型的下载地址。小程序主包上限 2MB，集卡高模单个就 1.5MB+，
+   * 放不进包，只能运行时下载后缓存到本地。包内的低模负责首屏不空场。
+   *
+   * 开发阶段用 http + IP，需要在开发者工具勾选「不校验合法域名」。
+   * 正式发布必须换成 https 域名，并在公众平台配置 downloadFile 合法域名。
+   * 置空则完全禁用远端模型，只用包内低模。
+   */
+  modelBaseUrl: 'http://117.72.38.68/models',
   // 本机联调（电脑和真机同一 Wi-Fi，端口不能省）
   // apiBaseUrl: 'http://10.249.196.198:19207/guide',
   // wsBaseUrl: 'ws://10.249.196.198:19207/guide',
