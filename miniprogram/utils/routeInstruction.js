@@ -7,23 +7,16 @@ function displayAreaName(name) {
   return String(name || '').replace(/座场区/g, '区').replace(/座/g, '区')
 }
 
-function metersPerDegree(latitude) {
-  return {
-    lon: 111320 * Math.cos(((latitude || 0) * Math.PI) / 180),
-    lat: 111320
-  }
-}
-
-function pointInRing(lng, lat, ring) {
+function pointInRing(x, y, ring) {
   if (!ring || ring.length < 3) return false
   let inside = false
   for (let i = 0, j = ring.length - 1; i < ring.length; j = i, i += 1) {
-    const xi = Number(ring[i].longitude)
-    const yi = Number(ring[i].latitude)
-    const xj = Number(ring[j].longitude)
-    const yj = Number(ring[j].latitude)
-    const hit = ((yi > lat) !== (yj > lat))
-      && (lng < ((xj - xi) * (lat - yi)) / ((yj - yi) || 1e-12) + xi)
+    const xi = Number(ring[i].x)
+    const yi = Number(ring[i].y)
+    const xj = Number(ring[j].x)
+    const yj = Number(ring[j].y)
+    const hit = ((yi > y) !== (yj > y))
+      && (x < ((xj - xi) * (y - yi)) / ((yj - yi) || 1e-12) + xi)
     if (hit) inside = !inside
   }
   return inside
@@ -31,11 +24,11 @@ function pointInRing(lng, lat, ring) {
 
 function isInsideBlocks(point, blocks) {
   if (!point || !blocks || !blocks.length) return false
-  const lng = Number(point.longitude)
-  const lat = Number(point.latitude)
-  if (Number.isNaN(lng) || Number.isNaN(lat)) return false
+  const x = Number(point.x)
+  const y = Number(point.y)
+  if (Number.isNaN(x) || Number.isNaN(y)) return false
   for (let i = 0; i < blocks.length; i += 1) {
-    if (pointInRing(lng, lat, blocks[i] && blocks[i].polygon)) return true
+    if (pointInRing(x, y, blocks[i] && blocks[i].polygon)) return true
   }
   return false
 }
@@ -48,12 +41,12 @@ function dropInBlockLead(points, blocks) {
   return points.slice(start)
 }
 
-function turnAtLonLat(prev, pivot, next, latitude) {
-  const m = metersPerDegree(latitude != null ? latitude : pivot.latitude)
-  const inE = (pivot.longitude - prev.longitude) * m.lon
-  const inN = (pivot.latitude - prev.latitude) * m.lat
-  const outE = (next.longitude - pivot.longitude) * m.lon
-  const outN = (next.latitude - pivot.latitude) * m.lat
+/** 场图坐标 X 东、Y 南，换成东/北后再算叉积。 */
+function turnAtYard(prev, pivot, next) {
+  const inE = pivot.x - prev.x
+  const inN = prev.y - pivot.y
+  const outE = next.x - pivot.x
+  const outN = pivot.y - next.y
   return signedTurn(inE, inN, outE, outN)
 }
 
@@ -113,12 +106,12 @@ function headingEastNorth(east, north) {
   return (Math.atan2(east, north) * 180) / Math.PI
 }
 
-function headingLonLat(from, to, latitude) {
-  const m = metersPerDegree(latitude != null ? latitude : from.latitude)
-  return headingEastNorth(
-    (to.longitude - from.longitude) * m.lon,
-    (to.latitude - from.latitude) * m.lat
-  )
+function headingYard(from, to) {
+  return headingEastNorth(to.x - from.x, from.y - to.y)
+}
+
+function yardDistance(from, to) {
+  return Math.hypot(to.x - from.x, to.y - from.y)
 }
 
 function headingWorld(from, to) {
@@ -156,19 +149,18 @@ function firstRequiredTurn(points, headingFn, distFn) {
 }
 
 function projectRoute(self, points) {
-  const m = metersPerDegree(self.latitude)
-  const px = self.longitude * m.lon
-  const py = self.latitude * m.lat
+  const px = self.x
+  const py = self.y
   let best = 0
   let bestRatio = 0
   let bestDist = Infinity
   const segLen = []
   const snaps = []
   for (let i = 0; i < points.length - 1; i += 1) {
-    const ax = points[i].longitude * m.lon
-    const ay = points[i].latitude * m.lat
-    const bx = points[i + 1].longitude * m.lon
-    const by = points[i + 1].latitude * m.lat
+    const ax = points[i].x
+    const ay = points[i].y
+    const bx = points[i + 1].x
+    const by = points[i + 1].y
     const dx = bx - ax
     const dy = by - ay
     const len2 = dx * dx + dy * dy
@@ -215,38 +207,31 @@ function projectRoute(self, points) {
   let remain = (1 - bestRatio) * (segLen[best] || 0)
   for (let i = best + 1; i < segLen.length; i += 1) remain += segLen[i]
   const clipped = [Object.assign({}, points[best], {
-    longitude: points[best].longitude + (points[best + 1].longitude - points[best].longitude) * bestRatio,
-    latitude: points[best].latitude + (points[best + 1].latitude - points[best].latitude) * bestRatio
+    x: points[best].x + (points[best + 1].x - points[best].x) * bestRatio,
+    y: points[best].y + (points[best + 1].y - points[best].y) * bestRatio
   })]
   for (let i = best + 1; i < points.length; i += 1) clipped.push(points[i])
   return { points: clipped, remain }
 }
 
-function prepareLonLatRoute(self, points, blocks) {
+function prepareYardRoute(self, points, blocks) {
   const onRoad = dropInBlockLead(points, blocks)
-  const stripped = stripBacktrack(onRoad, (a, b, c) => turnAtLonLat(a, b, c, self && self.latitude))
+  const stripped = stripBacktrack(onRoad, turnAtYard)
   if (!self || stripped.length < 2) return { points: stripped, remain: 0 }
   return projectRoute(self, stripped)
 }
 
 function remainingAlongRoute(self, points, blocks) {
   if (!self || !points || points.length < 2) return 0
-  return prepareLonLatRoute(self, points, blocks).remain
+  return prepareYardRoute(self, points, blocks).remain
 }
 
 function describeNextInstruction(self, points, targetName, blocks) {
   if (!self || !points || points.length < 2) return ''
-  const hit = prepareLonLatRoute(self, points, blocks)
+  const hit = prepareYardRoute(self, points, blocks)
   if (!hit.points || hit.points.length < 2) return ''
   if (hit.remain <= 28) return formatStraight(hit.remain, targetName)
-  const turn = firstRequiredTurn(
-    hit.points,
-    (a, b) => headingLonLat(a, b, self.latitude),
-    (a, b) => {
-      const m = metersPerDegree(self.latitude)
-      return Math.hypot((b.longitude - a.longitude) * m.lon, (b.latitude - a.latitude) * m.lat)
-    }
-  )
+  const turn = firstRequiredTurn(hit.points, headingYard, yardDistance)
   if (!turn) return formatStraight(hit.remain, targetName)
   return formatDriveToTurn(turn.distance, turn.maneuver)
 }

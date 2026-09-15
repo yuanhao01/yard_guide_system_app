@@ -1,92 +1,115 @@
 .login-page {
   box-sizing: border-box;
   min-height: 100vh;
-  padding: 120rpx 44rpx 48rpx;
-  background: linear-gradient(165deg, #12372a 0%, #1d5c45 42%, #f4f6f5 42%);
+  padding: 0 40rpx 56rpx;
+  background: #eef2f0;
+}
+
+.hero {
+  position: relative;
+  margin: 0 -40rpx;
+  padding: 88rpx 48rpx 96rpx;
+  overflow: hidden;
+  border-radius: 0 0 56rpx 56rpx;
+  background: linear-gradient(152deg, #0c2820 0%, #145a42 48%, #1a7a55 100%);
 }
 
 .brand {
-  height: 360rpx;
+  position: relative;
+  z-index: 1;
   color: #ffffff;
   text-align: center;
 }
 
 .brand-mark {
-  width: 112rpx;
-  height: 112rpx;
-  margin: 0 auto 30rpx;
-  border: 2rpx solid rgba(255, 255, 255, 0.42);
-  border-radius: 30rpx;
-  background: rgba(255, 255, 255, 0.12);
-  font-size: 52rpx;
+  width: 104rpx;
+  height: 104rpx;
+  margin: 0 auto 28rpx;
+  border: 2rpx solid rgba(255, 255, 255, 0.35);
+  border-radius: 28rpx;
+  background: rgba(255, 255, 255, 0.1);
+  box-shadow: 0 12rpx 40rpx rgba(0, 0, 0, 0.15);
+  font-size: 48rpx;
   font-weight: 700;
-  line-height: 112rpx;
+  line-height: 104rpx;
 }
 
 .brand-title {
-  font-size: 44rpx;
+  font-size: 42rpx;
   font-weight: 700;
-  letter-spacing: 4rpx;
+  letter-spacing: 2rpx;
 }
 
 .brand-subtitle {
-  margin-top: 18rpx;
-  color: rgba(255, 255, 255, 0.72);
-  font-size: 25rpx;
+  max-width: 520rpx;
+  margin: 16rpx auto 0;
+  color: rgba(255, 255, 255, 0.78);
+  font-size: 24rpx;
+  line-height: 1.55;
 }
 
 .login-card {
-  padding: 44rpx 36rpx 34rpx;
-  border-radius: 30rpx;
+  position: relative;
+  z-index: 2;
+  margin-top: -48rpx;
+  padding: 40rpx 32rpx 32rpx;
+  border: 1rpx solid rgba(255, 255, 255, 0.85);
+  border-radius: 32rpx;
   background: #ffffff;
-  box-shadow: 0 24rpx 80rpx rgba(12, 40, 29, 0.16);
+  box-shadow: 0 20rpx 60rpx rgba(12, 40, 29, 0.1), 0 4rpx 16rpx rgba(12, 40, 29, 0.04);
 }
 
 .kind-tabs {
   display: flex;
-  margin: 0 0 36rpx;
-  padding: 6rpx;
-  border-radius: 18rpx;
-  background: #eef4f1;
+  margin: 0 0 32rpx;
+  padding: 8rpx;
+  border-radius: 20rpx;
+  background: #edf3f0;
 }
 
 .kind-tab {
   flex: 1;
-  height: 72rpx;
-  border-radius: 14rpx;
-  color: #5d6e67;
+  height: 76rpx;
+  border-radius: 16rpx;
+  color: #5f7169;
   font-size: 26rpx;
   font-weight: 600;
-  line-height: 72rpx;
+  line-height: 76rpx;
   text-align: center;
+  transition: color 0.2s;
 }
 
 .kind-tab.active {
-  color: #147d55;
+  color: #0f6b4a;
   background: #ffffff;
-  box-shadow: 0 6rpx 16rpx rgba(20, 125, 85, 0.12);
+  box-shadow: 0 4rpx 14rpx rgba(15, 107, 74, 0.1);
 }
 
 .field-label {
-  margin: 8rpx 0 14rpx;
-  color: #41534b;
-  font-size: 25rpx;
+  margin: 4rpx 0 12rpx;
+  color: #3d4f47;
+  font-size: 24rpx;
   font-weight: 600;
 }
 
 .field-input {
   box-sizing: border-box;
-  height: 92rpx;
-  margin-bottom: 30rpx;
-  padding: 0 26rpx;
-  border: 1rpx solid #dce5e0;
-  border-radius: 16rpx;
-  background: #f8faf9;
-  font-size: 29rpx;
+  height: 96rpx;
+  margin-bottom: 28rpx;
+  padding: 0 28rpx;
+  border: 2rpx solid #e4ebe7;
+  border-radius: 18rpx;
+  background: #f9fbfa;
+  font-size: 28rpx;
+}
+
+.field-input:focus {
+  border-color: #1a7a55;
+  background: #ffffff;
 }
 
 .picker-value {
-  line-height: 92rpx;
+  line-height: 96rpx;
 }
 
 .picker-value.placeholder {
@@ -94,18 +117,21 @@
 }
 
 .login-button {
-  margin-top: 12rpx;
+  margin-top: 8rpx;
+  border-radius: 20rpx;
+  background: linear-gradient(135deg, #147d55 0%, #1a9464 100%);
 }
 
 .privacy-tip {
-  margin-top: 24rpx;
+  margin-top: 28rpx;
   color: #8a9690;
   font-size: 22rpx;
+  line-height: 1.5;
   text-align: center;
 }
 
 .yards-error {
-  margin-top: 12rpx;
+  margin: -16rpx 0 20rpx;
   color: #b45309;
   font-size: 22rpx;
   line-height: 1.5;
@@ -113,11 +139,12 @@
 
 .login-tip {
   margin-top: 24rpx;
-  color: #147d55;
-  font-size: 23rpx;
+  color: #5a8f76;
+  font-size: 22rpx;
+  line-height: 1.55;
   text-align: center;
 }
 
 .login-tip + .privacy-tip {
-  margin-top: 10rpx;
+  margin-top: 12rpx;
 }

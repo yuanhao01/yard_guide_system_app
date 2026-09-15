@@ -4,13 +4,15 @@
  * 不用 canvas 2d 假倾斜。相机是透视投影，箱垛是真实 Box 网格，
  * 观感对齐高德地图那种挤出建筑：能看见侧面、有透视远近、能俯仰缩放。
  *
- * 世界坐标：X 东、Y 上、Z 南（与场图一致：Y/纬度向南增大），单位米。
+ * 坐标系：接口下发的 {x, y} 就是场图绘制米制坐标（X 东增、Y 南增），
+ * 与场图编辑器 position.set(startX, 0, startY) 完全一致，1 单位 = 1 米。
+ * 世界坐标直接取 (x, 高度, y)，不做任何经纬度投影——经纬度只在后端按
+ * 堆场三点定标换算，司机端不参与。
  */
 const { createScopedThreejs } = require('../libs/threejs/index.js')
 const vehicleLoader = require('./vehicleLoader')
 const headingSensor = require('./heading')
 
-const M_PER_DEG_LAT = 111320
 const STACK_HEIGHT = 7.8
 /** 单层集装箱高度（米），箱垛高度按堆放层数叠出来。 */
 const CNTR_LAYER_H = 2.75
@@ -27,28 +29,37 @@ function clampPitch(pitch) {
   return Math.max(MIN_PITCH, Math.min(MAX_PITCH, pitch))
 }
 
-function metersPerDegLon(lat) {
-  return M_PER_DEG_LAT * Math.cos((lat * Math.PI) / 180)
+/** 接口点 → 场图米制 {x, y}，缺 x/y 的点一律丢弃，不再拿经纬度顶替。 */
+function xyOf(point) {
+  if (!point) return null
+  const x = Number(point.x)
+  const y = Number(point.y)
+  if (!Number.isFinite(x) || !Number.isFinite(y)) return null
+  return { x, y }
 }
 
 function boundsOf(points) {
-  let minLng = Infinity
-  let maxLng = -Infinity
-  let minLat = Infinity
-  let maxLat = -Infinity
+  let minX = Infinity
+  let maxX = -Infinity
+  let minY = Infinity
+  let maxY = -Infinity
   points.forEach(p => {
-    minLng = Math.min(minLng, p.longitude)
-    maxLng = Math.max(maxLng, p.longitude)
-    minLat = Math.min(minLat, p.latitude)
-    maxLat = Math.max(maxLat, p.latitude)
+    minX = Math.min(minX, p.x)
+    maxX = Math.max(maxX, p.x)
+    minY = Math.min(minY, p.y)
+    maxY = Math.max(maxY, p.y)
   })
-  return { minLng, maxLng, minLat, maxLat }
+  return { minX, maxX, minY, maxY }
 }
 
 function yardBounds(map) {
   const points = []
-  ;(map.blocks || []).forEach(b => (b.polygon || []).forEach(p => points.push(p)))
-  ;(map.roads || []).forEach(r => (r.path || []).forEach(p => points.push(p)))
+  const push = p => {
+    const xy = xyOf(p)
+    if (xy) points.push(xy)
+  }
+  ;(map.blocks || []).forEach(b => (b.polygon || []).forEach(push))
+  ;(map.roads || []).forEach(r => (r.path || []).forEach(push))
   return points.length ? boundsOf(points) : null
 }
 
@@ -59,19 +70,8 @@ function yardBounds(map) {
 function distanceToBounds(bounds, self, padMeters) {
   if (!bounds || !self) return null
   const pad = padMeters || 0
-  const mLon = metersPerDegLon(self.latitude)
-  const padLon = pad / mLon
-  const padLat = pad / M_PER_DEG_LAT
-  const dx = Math.max(
-    (bounds.minLng - padLon) - self.longitude,
-    0,
-    self.longitude - (bounds.maxLng + padLon)
-  ) * mLon
-  const dy = Math.max(
-    (bounds.minLat - padLat) - self.latitude,
-    0,
-    self.latitude - (bounds.maxLat + padLat)
-  ) * M_PER_DEG_LAT
+  const dx = Math.max((bounds.minX - pad) - self.x, 0, self.x - (bounds.maxX + pad))
+  const dy = Math.max((bounds.minY - pad) - self.y, 0, self.y - (bounds.maxY + pad))
   return Math.hypot(dx, dy)
 }
 
@@ -151,11 +151,9 @@ function createYardScene(canvas, width, height, dpr) {
     self: null,
     followMode: true,
     userView: null,
-    // lookAt 用经纬度；distance 相机距离；pitch 俯仰；bearing 方位（弧度，0=从南望北）
-    view: { centerLng: 0, centerLat: 0, distance: 220, pitch: DEFAULT_PITCH, bearing: 0 },
+    // lookAt 用场图米制 (x, y)；distance 相机距离；pitch 俯仰；bearing 方位（弧度，0=从南望北）
+    view: { centerX: 0, centerY: 0, distance: 220, pitch: DEFAULT_PITCH, bearing: 0 },
     fitDistance: 220,
-    originLng: 0,
-    originLat: 0,
     offYardMeters: null,
     dirty: true,
     running: true,
@@ -165,9 +163,8 @@ function createYardScene(canvas, width, height, dpr) {
     demoContainerAnchor: null,
     routeEnd: null,
     routeLine: null,
-    /** 出场道口固定锚点（导航配置 entry），与当前任务终点无关 */
-    gateAnchorLng: null,
-    gateAnchorLat: null,
+    /** 出场道口固定锚点（导航配置 entry 的场图坐标），与当前任务终点无关 */
+    gateAnchor: null,
     purpose: 'job',
     // 北朝上。车头跟手机转，和右上角高德小人一致；拧地图才改 bearing
     headingUp: false,
@@ -178,21 +175,15 @@ function createYardScene(canvas, width, height, dpr) {
     }
   }
 
-  function toWorld(lng, lat, y) {
-    const mLon = metersPerDegLon(state.originLat || lat)
-    const x = (lng - state.originLng) * mLon
-    // Z 向南：纬度越大（北）Z 越小
-    const z = -(lat - state.originLat) * M_PER_DEG_LAT
-    return new THREE.Vector3(x, y || 0, z)
+  /** 场图米制点 → 世界坐标。场图 Y 南增，世界 Z 也朝南，直接同号。 */
+  function toWorld(point, height) {
+    const xy = xyOf(point)
+    if (!xy) return new THREE.Vector3(0, height || 0, 0)
+    return new THREE.Vector3(xy.x, height || 0, xy.y)
   }
 
   function fromWorld(x, z) {
-    const lat0 = state.originLat || 0
-    const mLon = metersPerDegLon(lat0) || 1
-    return {
-      longitude: state.originLng + x / mLon,
-      latitude: lat0 - z / M_PER_DEG_LAT
-    }
+    return { x, y: z }
   }
 
   function polylineLength(points) {
@@ -208,11 +199,6 @@ function createYardScene(canvas, width, height, dpr) {
     let n = onPoint.distanceTo(points[index + 1])
     for (let i = index + 2; i < points.length; i += 1) n += points[i - 1].distanceTo(points[i])
     return n
-  }
-
-  function setOriginFromBounds(bounds) {
-    state.originLng = (bounds.minLng + bounds.maxLng) / 2
-    state.originLat = (bounds.minLat + bounds.maxLat) / 2
   }
 
   function disposeObject(obj) {
@@ -328,12 +314,15 @@ function createYardScene(canvas, width, height, dpr) {
   function buildRoads(roads) {
     ;(roads || []).forEach(road => {
       const path = road.path || []
-      const widthM = Number(road.speedLimitKmh) >= 15 ? 9 : 6.5
+      // 场图维护的真实路宽；旧数据没有时才按限速粗估
+      const widthM = Number(road.widthM) > 0
+        ? Number(road.widthM)
+        : (Number(road.speedLimitKmh) >= 15 ? 9 : 6.5)
       const dir = Number(road.directionType)
       const twoWay = !(dir === 1 || dir === 2)
       const points = []
       for (let i = 0; i < path.length; i += 1) {
-        points.push(toWorld(path[i].longitude, path[i].latitude, 0))
+        points.push(toWorld(path[i], 0))
       }
       for (let i = 0; i < points.length - 1; i += 1) {
         const a = points[i]
@@ -702,8 +691,8 @@ function createYardScene(canvas, width, height, dpr) {
     let best = null
     let bestD = Infinity
     for (let i = 0; i < path.length - 1; i += 1) {
-      const a = toWorld(path[i].longitude, path[i].latitude, 0)
-      const b = toWorld(path[i + 1].longitude, path[i + 1].latitude, 0)
+      const a = toWorld(path[i], 0)
+      const b = toWorld(path[i + 1], 0)
       const dx = b.x - a.x
       const dz = b.z - a.z
       const len2 = dx * dx + dz * dz
@@ -745,7 +734,7 @@ function createYardScene(canvas, width, height, dpr) {
   /** 把 (u, v) 归一化坐标换算成世界坐标，u 沿贝方向、v 沿排方向。 */
   function cornerAt(corners, u, v) {
     const p = lerp2(lerp2(corners.sw, corners.se, u), lerp2(corners.nw, corners.ne, u), v)
-    return toWorld(p[0], p[1], 0)
+    return toWorld({ x: p[0], y: p[1] }, 0)
   }
 
   /**
@@ -808,36 +797,36 @@ function createYardScene(canvas, width, height, dpr) {
   }
 
   function buildOneBlock(block, targetBlockId, targetSlot) {
-      const polygon = block.polygon || []
-      if (polygon.length < 4) return
+      const polygon = (block.polygon || []).map(xyOf)
+      if (polygon.length < 4 || polygon.some(p => !p)) return
       const corners = {
-        sw: [polygon[0].longitude, polygon[0].latitude],
-        se: [polygon[1].longitude, polygon[1].latitude],
-        ne: [polygon[2].longitude, polygon[2].latitude],
-        nw: [polygon[3].longitude, polygon[3].latitude]
+        sw: [polygon[0].x, polygon[0].y],
+        se: [polygon[1].x, polygon[1].y],
+        ne: [polygon[2].x, polygon[2].y],
+        nw: [polygon[3].x, polygon[3].y]
       }
       const slots = Math.max(block.slotCount || 1, 1)
       const rows = Math.max(block.rowCount || 1, 1)
       const palette = blockPalette(block)
 
-      let psw = toWorld(corners.sw[0], corners.sw[1], 0)
-      let pse = toWorld(corners.se[0], corners.se[1], 0)
-      let pnw = toWorld(corners.nw[0], corners.nw[1], 0)
+      const cornerWorld = c => toWorld({ x: c[0], y: c[1] }, 0)
+      let psw = cornerWorld(corners.sw)
+      let pse = cornerWorld(corners.se)
+      let pnw = cornerWorld(corners.nw)
       // 长边必须是贝、短边是排；若接口多边形对调了，这里把 u/v 拧回来
       if (psw.distanceTo(pse) + 0.5 < psw.distanceTo(pnw)) {
-        corners.se = [polygon[3].longitude, polygon[3].latitude]
-        corners.nw = [polygon[1].longitude, polygon[1].latitude]
-        psw = toWorld(corners.sw[0], corners.sw[1], 0)
-        pse = toWorld(corners.se[0], corners.se[1], 0)
-        pnw = toWorld(corners.nw[0], corners.nw[1], 0)
+        corners.se = [polygon[3].x, polygon[3].y]
+        corners.nw = [polygon[1].x, polygon[1].y]
+        psw = cornerWorld(corners.sw)
+        pse = cornerWorld(corners.se)
+        pnw = cornerWorld(corners.nw)
       }
       const baseW = Math.max(psw.distanceTo(pse), 1)
       const baseD = Math.max(psw.distanceTo(pnw), 1)
-      const baseCenter = toWorld(
-        (corners.sw[0] + corners.se[0] + corners.ne[0] + corners.nw[0]) / 4,
-        (corners.sw[1] + corners.se[1] + corners.ne[1] + corners.nw[1]) / 4,
-        0
-      )
+      const baseCenter = toWorld({
+        x: (corners.sw[0] + corners.se[0] + corners.ne[0] + corners.nw[0]) / 4,
+        y: (corners.sw[1] + corners.se[1] + corners.ne[1] + corners.nw[1]) / 4
+      }, 0)
       const yaw = Math.atan2(pse.x - psw.x, pse.z - psw.z)
 
       // yaw 让局部 +Z 对准贝方向(U)。BoxGeometry 的 x=排向、z=贝向，不能对调。
@@ -972,13 +961,11 @@ function createYardScene(canvas, width, height, dpr) {
     if (!map) return
     const bounds = yardBounds(map)
     if (!bounds) return
-    setOriginFromBounds(bounds)
     state.bounds = bounds
     buildPavement()
     buildRoads(map.roads)
     buildBlocksClean(map.blocks, state.targetBlockId, state.targetSlot)
     buildCrossing()
-    // 原点刚定下来，路线/车模必须按新原点重算，否则会飞到场外看不见
     rebuildRoute()
     rebuildDynamic()
     state.dirty = true
@@ -1074,7 +1061,7 @@ function createYardScene(canvas, width, height, dpr) {
     for (let i = 0; i < blocks.length; i += 1) {
       const polygon = blocks[i].polygon || []
       if (polygon.length < 4) continue
-      const ring = polygon.map(pt => toWorld(pt.longitude, pt.latitude, 0))
+      const ring = polygon.map(pt => toWorld(pt, 0))
       if (pointInConvex(worldPos, insetRing(ring, 2.2))) return true
     }
     return false
@@ -1111,11 +1098,19 @@ function createYardScene(canvas, width, height, dpr) {
   function chordOffRoad(a, b) {
     if (!a || !b) return false
     const hop = a.distanceTo(b)
-    if (hop <= 12) return false
     if (segmentHitsBlock(a, b)) return true
+    if (hop <= 6) return false
     const mid = a.clone().lerp(b, 0.5)
     const snap = nearestRoadSnap(mid)
-    return !snap || snap.dist > 7
+    if (!snap || snap.dist > 5.5) return true
+    const aSnap = nearestRoadSnap(a)
+    const bSnap = nearestRoadSnap(b)
+    if (!aSnap || !bSnap || aSnap.dist > 8 || bSnap.dist > 8) return true
+    if (aSnap.road && bSnap.road && aSnap.road !== bSnap.road && hop > 10) {
+      const samePath = (aSnap.road.edgeCode && aSnap.road.edgeCode === bSnap.road.edgeCode)
+      if (!samePath) return true
+    }
+    return false
   }
 
   /** 蓝线只留马路上的点，掐掉穿进箱区的头尾。 */
@@ -1145,11 +1140,13 @@ function createYardScene(canvas, width, height, dpr) {
     const roads = (state.map && state.map.roads) || []
     let best = null
     let bestDist = Infinity
+    let bestRoad = null
+    let bestTan = null
     for (let r = 0; r < roads.length; r += 1) {
       const path = roads[r].path || []
       for (let i = 0; i < path.length - 1; i += 1) {
-        const a = toWorld(path[i].longitude, path[i].latitude, 0)
-        const b = toWorld(path[i + 1].longitude, path[i + 1].latitude, 0)
+        const a = toWorld(path[i], 0)
+        const b = toWorld(path[i + 1], 0)
         const dx = b.x - a.x
         const dz = b.z - a.z
         const len2 = dx * dx + dz * dz
@@ -1159,23 +1156,59 @@ function createYardScene(canvas, width, height, dpr) {
         if (dist < bestDist) {
           bestDist = dist
           best = on
+          bestRoad = roads[r]
+          const len = Math.hypot(dx, dz) || 1
+          bestTan = new THREE.Vector3(dx / len, 0, dz / len)
         }
       }
     }
     state.roadSnapM = Number.isFinite(bestDist) ? bestDist : null
-    return best && bestDist < 48 ? { pos: best, dist: bestDist } : null
+    return best && bestDist < 48
+      ? { pos: best, dist: bestDist, road: bestRoad, tangent: bestTan }
+      : null
+  }
+
+  function roadCorridorKey(road) {
+    if (!road) return ''
+    const tag = `${road.edgeCode || ''}|${road.edgeName || ''}|${road.roadName || ''}`
+    if (/R-EAST|Road03|东主/i.test(tag)) return 'MAIN-E'
+    if (/R-WEST|Road02|西主/i.test(tag)) return 'MAIN-W'
+    return tag || 'other'
+  }
+
+  /** 折线段是否与集卡在同一条路上（优先比 edgeCode，避免只认 truck 那一条路的对象引用） */
+  function segmentOnTruckRoad(a, b, truckPos) {
+    const truckHit = nearestRoadSnap(truckPos)
+    if (!truckHit || !truckHit.road) return true
+    const mid = new THREE.Vector3((a.x + b.x) * 0.5, 0, (a.z + b.z) * 0.5)
+    const segHit = nearestRoadSnap(mid)
+    if (!segHit || !segHit.road) return false
+    const tk = roadCorridorKey(truckHit.road)
+    const sk = roadCorridorKey(segHit.road)
+    if (tk && sk && tk === sk) return true
+    if (truckHit.road.edgeCode && segHit.road.edgeCode
+        && truckHit.road.edgeCode === segHit.road.edgeCode) {
+      return true
+    }
+    const onRoad = projectToRoadPath(mid, truckHit.road.path || [])
+    return onRoad && onRoad.dist <= 12
+  }
+
+  function selfWorld() {
+    return state.self ? toWorld(state.self, 0) : null
   }
 
   function selfOnRoadPos() {
-    if (!state.self) return null
-    const gps = toWorld(state.self.longitude, state.self.latitude, 0)
-    const snap = nearestRoadSnap(gps)
-    return snap ? snap.pos : gps
+    const pos = selfWorld()
+    if (!pos) return null
+    const snap = nearestRoadSnap(pos)
+    return snap ? snap.pos : pos
   }
 
   function segmentHitsBlock(a, b) {
     if (!a || !b) return false
-    const samples = 4
+    const hop = Math.hypot(b.x - a.x, b.z - a.z)
+    const samples = Math.max(8, Math.ceil(hop / 4))
     for (let i = 1; i < samples; i += 1) {
       const t = i / samples
       const p = new THREE.Vector3(a.x + (b.x - a.x) * t, 0, a.z + (b.z - a.z) * t)
@@ -1203,10 +1236,26 @@ function createYardScene(canvas, width, height, dpr) {
     }
     if (!candidates.length) return null
     const total = polylineLength(points)
+    const sameRoad = candidates.filter(c => {
+      const a = points[c.index]
+      const b = points[c.index + 1]
+      return segmentOnTruckRoad(a, b, selfPos)
+    })
+    const pool = sameRoad.length ? sameRoad : candidates
     // 已经压在某段上（<8m）：用这段。C 与南通道只隔约 20m，18m 容差会把后半圈平行路算进来。
-    const onRoad = candidates.filter(c => c.dist <= Math.max(8, minDist + 3))
-    let chosen = (onRoad.length ? onRoad : candidates.filter(c => c.dist <= minDist + 8))
-      .reduce((best, c) => (c.dist < best.dist ? c : best), candidates[0])
+    const onRoad = pool.filter(c => c.dist <= Math.max(8, minDist + 3))
+    let chosen = (onRoad.length ? onRoad : pool.filter(c => c.dist <= minDist + 8))
+      .reduce((best, c) => (c.dist < best.dist ? c : best), pool[0])
+    // 车已贴在某段路上（≤12m）：若存在与车同路的段，禁止接到平行主通道
+    if (minDist <= 12) {
+      if (sameRoad.length) {
+        const nearSame = sameRoad.filter(c => c.dist <= Math.max(12, minDist + 4))
+        if (nearSame.length) {
+          chosen = nearSame.reduce((best, c) => (c.dist < best.dist ? c : best), nearSame[0])
+        }
+      }
+      return chosen
+    }
     const close = candidates.filter(c => c.dist <= Math.max(chosen.dist + 6, 12))
     const rests = close.map(c => c.rest)
     const minR = Math.min(...rests)
@@ -1226,17 +1275,40 @@ function createYardScene(canvas, width, height, dpr) {
   }
 
   /**
-   * 剩余蓝线：从集卡贴路位置接入规划折线，画到终点（完整东→南→北→东，不是直线到贝位）。
+   * 剩余路段：只沿后端路网折线画，禁止集卡→折线投影点的直线（会斜穿箱区）。
+   * 仅当车已在同一段路上且短线段贴马路时，才把集卡点接在折线前面。
    */
   function clipWorldRouteToSelf(points) {
     if (!points || points.length < 2 || !state.self) return points
-    const truck = selfOnRoadPos() || toWorld(state.self.longitude, state.self.latitude, 0)
+    const truck = selfOnRoadPos() || selfWorld()
     const chosen = pickRouteProgress(points, truck)
     if (!chosen) return points
+    const segA = points[chosen.index]
+    const segB = points[chosen.index + 1]
+    const onSameRoad = segmentOnTruckRoad(segA, segB, truck)
     const gap = truck.distanceTo(chosen.on)
+    const canStitchTruck = onSameRoad
+      && gap <= 10
+      && !chordOffRoad(truck, chosen.on)
+    const truckSnap = nearestRoadSnap(truck)
+    try {
+      console.log('[nav-route-draw]', JSON.stringify({
+        truck: state.self ? [state.self.x, state.self.y] : null,
+        truckRoad: truckSnap && truckSnap.road
+          ? (truckSnap.road.edgeCode || truckSnap.road.edgeName || truckSnap.road.roadName || '')
+          : '',
+        segIdx: chosen.index,
+        distToSegM: Math.round(chosen.dist * 10) / 10,
+        gapToOnM: Math.round(gap * 10) / 10,
+        onSameRoad,
+        canStitchTruck,
+        polyFirst: points[0] ? [points[0].x, points[0].z] : null
+      }))
+    } catch (logErr) {
+      // ignore
+    }
     const out = []
-    // 斜穿箱区/空地的接入段不画，从折线本身接着走
-    if (gap <= 8 && !segmentHitsBlock(truck, chosen.on)) {
+    if (canStitchTruck) {
       out.push(truck.clone())
       if (gap > 0.8) out.push(chosen.on.clone())
     } else {
@@ -1245,7 +1317,7 @@ function createYardScene(canvas, width, height, dpr) {
     for (let i = chosen.index + 1; i < points.length; i += 1) {
       if (out[out.length - 1].distanceTo(points[i]) > 0.8) out.push(points[i].clone())
     }
-    return out.length >= 2 ? out : points
+    return dropOffRoadChords(out.length >= 2 ? out : points)
   }
 
   function rebuildRoute() {
@@ -1257,7 +1329,7 @@ function createYardScene(canvas, width, height, dpr) {
     try {
       const raw = []
       for (let i = 0; i < route.length; i += 1) {
-        raw.push(toWorld(route[i].longitude, route[i].latitude, 0.86))
+        raw.push(toWorld(route[i], 0.86))
       }
       const dedup = [raw[0]]
       for (let i = 1; i < raw.length; i += 1) {
@@ -1266,12 +1338,17 @@ function createYardScene(canvas, width, height, dpr) {
       if (dedup.length < 2) return
       const onRoad = dropOffRoadChords(keepOnRoads(dropLeadStub(simplifyRoutePoints(trimDestinationStub(dedup)))))
       const clipped = clipWorldRouteToSelf(onRoad.length >= 2 ? onRoad : dedup)
+      if (!clipped || clipped.length < 2) {
+        state.dirty = true
+        return
+      }
       const offset = offsetPolylineRight(clipped, (idx, mid) => (
         isOneWayNear(mid) ? 0 : 2.7
       ))
       const cornerSafe = dropOffRoadChords(offset)
       const smoothed = filletPolyline(cornerSafe.length >= 2 ? cornerSafe : offset, 2.2)
-      const painted = dropOffRoadChords(smoothed)
+      let painted = dropOffRoadChords(smoothed)
+      if (painted.length < 2) painted = dropOffRoadChords(cornerSafe.length >= 2 ? cornerSafe : offset)
       const linePts = painted.length >= 2 ? painted : smoothed
       const blueW = 0.95
       const routeY = 0.52
@@ -1395,28 +1472,22 @@ function createYardScene(canvas, width, height, dpr) {
       const node = nodes[i]
       const label = `${node.nodeName || ''}${node.nodeCode || ''}`
       if (!/出场|出口|exit|gate/i.test(label)) continue
-      const lng = node.longitude != null ? Number(node.longitude) : NaN
-      const lat = node.latitude != null ? Number(node.latitude) : NaN
-      if (Number.isFinite(lng) && Number.isFinite(lat) && Math.abs(lng) > 1e-4 && Math.abs(lat) > 1e-4) {
-        return { lng, lat }
-      }
+      const xy = xyOf(node)
+      if (xy) return xy
     }
     return null
   }
 
-  /** 道口只认固定出场锚点，绝不使用当前路线终点/任务终点。 */
+  /**
+   * 道口只认固定出场锚点，绝不使用当前路线终点/任务终点。
+   * 场图没维护道口时返回 null —— 不能退到场区包围盒角上凭空立一个，
+   * 那会让司机以为那里有出场口。
+   */
   function resolveCrossingAnchor() {
-    const lng = state.gateAnchorLng != null ? Number(state.gateAnchorLng) : NaN
-    const lat = state.gateAnchorLat != null ? Number(state.gateAnchorLat) : NaN
-    if (Number.isFinite(lng) && Number.isFinite(lat) && Math.abs(lng) > 1e-4 && Math.abs(lat) > 1e-4) {
-      return toWorld(lng, lat, 0)
-    }
+    const anchor = xyOf(state.gateAnchor)
+    if (anchor) return toWorld(anchor, 0)
     const fromMap = pickExitNodeFromMap()
-    if (fromMap) return toWorld(fromMap.lng, fromMap.lat, 0)
-    if (state.bounds) {
-      return toWorld(state.bounds.maxLng, state.bounds.minLat, 0)
-    }
-    return null
+    return fromMap ? toWorld(fromMap, 0) : null
   }
 
   function crossingTangentAt(anchor) {
@@ -1436,7 +1507,7 @@ function createYardScene(canvas, width, height, dpr) {
       crossing.visible = true
       return
     }
-    const truck = toWorld(state.self.longitude, state.self.latitude, 0)
+    const truck = selfWorld()
     crossing.visible = truck.distanceTo(stop) > 8
   }
 
@@ -1474,10 +1545,10 @@ function createYardScene(canvas, width, height, dpr) {
   }
 
   function destPoint() {
-    if (state.routeEnd) return state.routeEnd.clone()
-    if (state.target && state.target.longitude != null && state.target.latitude != null) {
-      return toWorld(state.target.longitude, state.target.latitude, 0)
+    if (xyOf(state.target)) {
+      return toWorld(state.target, 0)
     }
+    if (state.routeEnd) return state.routeEnd.clone()
     return null
   }
 
@@ -1499,8 +1570,8 @@ function createYardScene(canvas, width, height, dpr) {
     const route = state.route || []
     const points = []
     for (let i = 0; i < route.length; i += 1) {
-      if (route[i] && route[i].longitude != null) {
-        points.push(toWorld(route[i].longitude, route[i].latitude, 0))
+      if (xyOf(route[i])) {
+        points.push(toWorld(route[i], 0))
       }
     }
     return points
@@ -1588,11 +1659,18 @@ function createYardScene(canvas, width, height, dpr) {
     return null
   }
 
+  /**
+   * 车位直接用后端吸附好的场区坐标，不再本地贴路——双向路的靠右偏移
+   * 一旦被 nearestRoadSnap 拉回中心线，车就会画在两车道中间。
+   * 道路切线只用来兜底车头朝向。
+   */
   function selfDisplayPose() {
-    const gps = toWorld(state.self.longitude, state.self.latitude, 0)
-    const snap = nearestRoadSnap(gps)
-    const pos = snap ? snap.pos.clone() : gps
-    const forward = routeForwardAt(pos) || (snap && snap.tangent) || new THREE.Vector3(0, 0, 1)
+    const pos = selfWorld()
+    let forward = routeForwardAt(pos)
+    if (!forward || forward.length() < 0.05) {
+      const snap = nearestRoadSnap(pos)
+      forward = (snap && snap.tangent) ? snap.tangent.clone() : new THREE.Vector3(0, 0, -1)
+    }
     return { pos, yaw: yawForTruck(forward) }
   }
 
@@ -1706,51 +1784,46 @@ function createYardScene(canvas, width, height, dpr) {
     const currentBearing = base.bearing != null ? base.bearing : 0
     if (!bounds) {
       return {
-        centerLng: state.view.centerLng,
-        centerLat: state.view.centerLat,
+        centerX: state.view.centerX,
+        centerY: state.view.centerY,
         distance: state.view.distance,
         pitch: currentPitch,
         bearing: currentBearing
       }
     }
-    const self = state.self
+    const self = xyOf(state.self)
     // TEST 演示场已按真机定位对齐，只留 40m 余量消化普通 GPS 抖动
     const off = distanceToBounds(bounds, self, 40)
     state.offYardMeters = off
     const framed = off !== null && off <= 400
       ? boundsOf([
-        { longitude: bounds.minLng, latitude: bounds.minLat },
-        { longitude: bounds.maxLng, latitude: bounds.maxLat },
+        { x: bounds.minX, y: bounds.minY },
+        { x: bounds.maxX, y: bounds.maxY },
         self
       ])
       : bounds
-    const centerLng = (framed.minLng + framed.maxLng) / 2
-    const centerLat = (framed.minLat + framed.maxLat) / 2
-    const mLon = metersPerDegLon(centerLat)
-    const spanX = Math.max((framed.maxLng - framed.minLng) * mLon, 60)
-    const spanY = Math.max((framed.maxLat - framed.minLat) * M_PER_DEG_LAT, 60)
+    const centerX = (framed.minX + framed.maxX) / 2
+    const centerY = (framed.minY + framed.maxY) / 2
+    const spanX = Math.max(framed.maxX - framed.minX, 60)
+    const spanY = Math.max(framed.maxY - framed.minY, 60)
     const span = Math.max(spanX, spanY)
     const fitDistance = Math.max(80, Math.min(MAX_DISTANCE, span * 1.35))
     state.fitDistance = fitDistance
 
     const inYard = off !== null && off <= 80
     if (state.followMode && !state.userView && inYard && self) {
-      let centerLng = self.longitude
-      let centerLat = self.latitude
-      if (poseSmooth.x != null && poseSmooth.z != null) {
-        const geo = fromWorld(poseSmooth.x, poseSmooth.z)
-        centerLng = geo.longitude
-        centerLat = geo.latitude
-      }
+      const center = poseSmooth.x != null && poseSmooth.z != null
+        ? fromWorld(poseSmooth.x, poseSmooth.z)
+        : self
       return {
-        centerLng,
-        centerLat,
+        centerX: center.x,
+        centerY: center.y,
         distance: 110,
         pitch: currentPitch,
         bearing: currentBearing
       }
     }
-    return { centerLng, centerLat, distance: fitDistance, pitch: currentPitch, bearing: currentBearing }
+    return { centerX, centerY, distance: fitDistance, pitch: currentPitch, bearing: currentBearing }
   }
 
   function applyCamera() {
@@ -1758,7 +1831,7 @@ function createYardScene(canvas, width, height, dpr) {
     if (view.pitch == null) view.pitch = DEFAULT_PITCH
     if (view.bearing == null) view.bearing = 0
     state.view = view
-    const target = toWorld(view.centerLng, view.centerLat, 0)
+    const target = toWorld({ x: view.centerX, y: view.centerY }, 0)
     const dist = view.distance
     const pitch = clampPitch(view.pitch)
     let bearing = view.bearing
@@ -1830,8 +1903,8 @@ function createYardScene(canvas, width, height, dpr) {
 
   function setTarget(target, label, targetBlockId, targetSlot) {
     const sameTarget = state.target && target
-      && Number(state.target.longitude) === Number(target.longitude)
-      && Number(state.target.latitude) === Number(target.latitude)
+      && Number(state.target.x) === Number(target.x)
+      && Number(state.target.y) === Number(target.y)
       && state.targetLabel === (label || '')
       && state.targetBlockId === targetBlockId
       && state.targetSlot === targetSlot
@@ -1847,20 +1920,19 @@ function createYardScene(canvas, width, height, dpr) {
     else applySelfPose()
   }
 
+  /**
+   * @param {{x:number, y:number, heading?:number}} self 后端按三点定标换算出的场区米制坐标
+   */
   function setSelf(self) {
+    const next = xyOf(self)
     // 视觉平滑：小幅度抖动不瞬移车模
-    let moved = !state.self
-    if (state.self && self) {
+    if (state.self && next) {
       const prev = state.self
-      const mLon = metersPerDegLon(self.latitude || prev.latitude || 0)
-      const dx = ((self.longitude || 0) - (prev.longitude || 0)) * mLon
-      const dy = ((self.latitude || 0) - (prev.latitude || 0)) * M_PER_DEG_LAT
-      const dist = Math.hypot(dx, dy)
-      moved = dist > 10
+      const dist = Math.hypot(next.x - prev.x, next.y - prev.y)
       const alpha = dist > 12 ? 0.85 : dist > 4 ? 0.55 : 0.28
       state.self = {
-        longitude: prev.longitude + ((self.longitude || prev.longitude) - prev.longitude) * alpha,
-        latitude: prev.latitude + ((self.latitude || prev.latitude) - prev.latitude) * alpha,
+        x: prev.x + (next.x - prev.x) * alpha,
+        y: prev.y + (next.y - prev.y) * alpha,
         heading: self.heading != null && !Number.isNaN(Number(self.heading))
           ? Number(self.heading)
           : (prev.heading != null ? prev.heading : 0),
@@ -1868,13 +1940,15 @@ function createYardScene(canvas, width, height, dpr) {
         accuracy: self.accuracy,
         speed: self.speed
       }
+    } else if (next) {
+      state.self = Object.assign({}, self, next)
     } else {
-      state.self = self
+      state.self = null
     }
     if (state.demoContainer && !state.demoContainerAnchor && state.self) {
       state.demoContainerAnchor = {
-        longitude: state.self.longitude,
-        latitude: state.self.latitude,
+        x: state.self.x,
+        y: state.self.y,
         heading: state.self.heading || 0
       }
       rebuildDynamic()
@@ -1930,8 +2004,8 @@ function createYardScene(canvas, width, height, dpr) {
 
   function snapshotView(view, patch) {
     return Object.assign({
-      centerLng: view.centerLng,
-      centerLat: view.centerLat,
+      centerX: view.centerX,
+      centerY: view.centerY,
       distance: view.distance,
       pitch: currentPitch(view),
       bearing: currentBearing(view)
@@ -1942,9 +2016,8 @@ function createYardScene(canvas, width, height, dpr) {
     const view = state.userView || state.view
     const pitch = currentPitch(view)
     const metersPerPx = (view.distance * 0.0018) + 0.08
-    const mLon = metersPerDegLon(view.centerLat)
     applyCamera()
-    const target = toWorld(view.centerLng, view.centerLat, 0)
+    const target = toWorld({ x: view.centerX, y: view.centerY }, 0)
     // 直接用当前相机在地面上的右/前，避免拧北后滑动还按「北朝上」换算
     const look = new THREE.Vector3(target.x - camera.position.x, 0, target.z - camera.position.z)
     let right
@@ -1960,8 +2033,8 @@ function createYardScene(canvas, width, height, dpr) {
     const moveX = (-dxPx * right.x + dyPx * look.x) * metersPerPx
     const moveZ = (-dxPx * right.z + dyPx * look.z) * metersPerPx
     const next = snapshotView(view, {
-      centerLng: view.centerLng + moveX / mLon,
-      centerLat: view.centerLat - moveZ / M_PER_DEG_LAT,
+      centerX: view.centerX + moveX,
+      centerY: view.centerY + moveZ,
       pitch
     })
     setUserView(next)
@@ -2033,8 +2106,8 @@ function createYardScene(canvas, width, height, dpr) {
     if (!state.self) return null
     const view = state.userView || state.view
     const next = snapshotView(view, {
-      centerLng: state.self.longitude,
-      centerLat: state.self.latitude,
+      centerX: state.self.x,
+      centerY: state.self.y,
       distance: Math.min(view.distance || 120, 120)
     })
     setUserView(next)
@@ -2110,16 +2183,13 @@ function createYardScene(canvas, width, height, dpr) {
     renderer.dispose()
   }
 
-  function setExitGateAnchor(lng, lat) {
-    const nextLng = lng != null ? Number(lng) : NaN
-    const nextLat = lat != null ? Number(lat) : NaN
-    if (!Number.isFinite(nextLng) || !Number.isFinite(nextLat)
-        || Math.abs(nextLng) < 1e-4 || Math.abs(nextLat) < 1e-4) {
-      return
-    }
-    const same = state.gateAnchorLng === nextLng && state.gateAnchorLat === nextLat
-    state.gateAnchorLng = nextLng
-    state.gateAnchorLat = nextLat
+  /** @param {{x:number, y:number}} anchor 出场道口的场图米制坐标 */
+  function setExitGateAnchor(anchor) {
+    const next = xyOf(anchor)
+    if (!next) return
+    const prev = state.gateAnchor
+    const same = prev && prev.x === next.x && prev.y === next.y
+    state.gateAnchor = next
     if (!same) buildCrossing()
   }
 
@@ -2154,7 +2224,7 @@ function createYardScene(canvas, width, height, dpr) {
     },
     getSelfWorld() {
       if (!state.self) return null
-      const pos = selfOnRoadPos() || toWorld(state.self.longitude, state.self.latitude, 0)
+      const pos = selfOnRoadPos() || selfWorld()
       return pos ? { x: pos.x, y: pos.y, z: pos.z } : null
     },
     renderFrame,
@@ -2163,24 +2233,66 @@ function createYardScene(canvas, width, height, dpr) {
   }
 }
 
+/**
+ * 把场区米制点投影到最近道路中心线，供上报规划与画面集卡贴路一致。
+ * 入参出参都是场图坐标，不再做经纬度换算。
+ */
+function snapPositionToRoad(roads, x, y, maxDistMeters) {
+  const self = xyOf({ x, y })
+  if (!self || !roads || !roads.length) {
+    return { x, y, snapped: false }
+  }
+  const maxDist = maxDistMeters == null ? 48 : maxDistMeters
+  let bestDist = Infinity
+  let bestX = self.x
+  let bestY = self.y
+  let bestRoad = null
+  roads.forEach(road => {
+    const path = road.path || []
+    for (let i = 0; i < path.length - 1; i += 1) {
+      const a = xyOf(path[i])
+      const b = xyOf(path[i + 1])
+      if (!a || !b) continue
+      const dx = b.x - a.x
+      const dy = b.y - a.y
+      const len2 = dx * dx + dy * dy
+      const t = len2 < 1e-12 ? 0 : Math.max(0, Math.min(1, ((self.x - a.x) * dx + (self.y - a.y) * dy) / len2))
+      const onx = a.x + t * dx
+      const ony = a.y + t * dy
+      const dist = Math.hypot(self.x - onx, self.y - ony)
+      if (dist < bestDist) {
+        bestDist = dist
+        bestX = onx
+        bestY = ony
+        bestRoad = road
+      }
+    }
+  })
+  const roadLabel = bestRoad ? {
+    edgeCode: bestRoad.edgeCode || '',
+    name: bestRoad.edgeName || bestRoad.roadName || ''
+  } : null
+  if (bestDist > maxDist) {
+    return { x: self.x, y: self.y, snapped: false, distM: bestDist, road: roadLabel }
+  }
+  return {
+    x: bestX,
+    y: bestY,
+    snapped: true,
+    distM: bestDist,
+    road: roadLabel
+  }
+}
+
 module.exports = {
   createYardScene,
+  snapPositionToRoad,
   nearestRoad(roads, self) {
     if (!self || !roads || !roads.length) return null
-    const mLon = metersPerDegLon(self.latitude)
-    let best = null
-    let bestDistance = Infinity
-    roads.forEach(road => {
-      (road.path || []).forEach(point => {
-        const dx = (point.longitude - self.longitude) * mLon
-        const dy = (point.latitude - self.latitude) * M_PER_DEG_LAT
-        const distance = Math.hypot(dx, dy)
-        if (distance < bestDistance) {
-          bestDistance = distance
-          best = road
-        }
-      })
-    })
-    return bestDistance <= 60 ? best : null
+    const snap = snapPositionToRoad(roads, self.x, self.y, 60)
+    if (!snap.road) return null
+    const hit = roads.find(r => (r.edgeCode && r.edgeCode === snap.road.edgeCode)
+      || ((r.edgeName || r.roadName) === snap.road.name))
+    return hit || null
   }
 }

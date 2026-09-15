@@ -65,7 +65,8 @@ function headingAgainstOneWay(self, road) {
   if (dir !== 1 && dir !== 2) return false
   const a = road.path[0]
   const b = road.path[road.path.length - 1]
-  let allowed = Math.atan2(b.longitude - a.longitude, b.latitude - a.latitude) * 180 / Math.PI
+  // 场图 Y 南增，北向分量取反后才能和罗盘航向（0 正北）对齐
+  let allowed = Math.atan2(b.x - a.x, a.y - b.y) * 180 / Math.PI
   if (dir === 2) allowed += 180
   const heading = self.heading == null ? null : Number(self.heading)
   if (heading == null || Number.isNaN(heading)) return false
@@ -75,6 +76,33 @@ function headingAgainstOneWay(self, road) {
 
 function compassRotateOf(status) {
   return status && typeof status.bearingDeg === 'number' ? status.bearingDeg : 0
+}
+
+function snapSelfToRoad(page, self) {
+  const roads = page.yardMapData && page.yardMapData.roads
+  if (!roads || !roads.length || !self || self.x == null || self.y == null) {
+    return { self, snap: null }
+  }
+  const snap = yardScene.snapPositionToRoad(roads, self.x, self.y)
+  if (!snap.snapped) return { self, snap }
+  return {
+    self: { ...self, x: snap.x, y: snap.y },
+    snap
+  }
+}
+
+function maybeForceRerouteIfRoadMismatch(page) {
+  const roads = page.yardMapData && page.yardMapData.roads
+  const p0 = page.routePoints && page.routePoints[0]
+  if (!roads || !page.self || !p0) return
+  const selfSnap = yardScene.snapPositionToRoad(roads, page.self.x, page.self.y)
+  const routeSnap = yardScene.snapPositionToRoad(roads, p0.x, p0.y)
+  const selfKey = selfSnap.road && (selfSnap.road.edgeCode || selfSnap.road.name)
+  const routeKey = routeSnap.road && (routeSnap.road.edgeCode || routeSnap.road.name)
+  if (selfKey && routeKey && selfKey !== routeKey) {
+    page._forceRerouteOnce = true
+    console.log('[nav-plan] roadMismatch', JSON.stringify({ selfRoad: selfKey, routeP0Road: routeKey }))
+  }
 }
 
 function instructionArrow(text) {
@@ -142,7 +170,9 @@ Page({
     this.yardMapData = null
     this.routePoints = []
     this.targetPoint = null
+    // self 是场区米制坐标（后端 selfPoint），gps 是原始定位，只用于上报
     this.self = null
+    this.gps = null
     this.scene = null
     this.locationListener = location => this.handleLocation(location)
     this.compassHeading = null
@@ -259,15 +289,9 @@ Page({
       await this.primeLocation()
       this._forceRerouteOnce = true
       this.startLocationUpdates()
-      if (this.self) {
+      if (this.gps) {
         this.lastReportTime = 0
-        await this.handleLocation({
-          longitude: this.self.longitude,
-          latitude: this.self.latitude,
-          accuracy: this.self.accuracy,
-          speed: this.self.speed,
-          direction: this.self.heading
-        })
+        await this.handleLocation(this.gps)
       }
     } catch (error) {
       wx.showToast({ title: error.message, icon: 'none' })
@@ -278,8 +302,13 @@ Page({
     if (!this.scene || !this.scene.setExitGateAnchor || !yardId) return
     try {
       const exit = await request({ url: `/navigation/mobile/exit-target?yardId=${yardId}` })
-      if (exit && exit.entryLongitude != null && exit.entryLatitude != null) {
-        this.scene.setExitGateAnchor(exit.entryLongitude, exit.entryLatitude)
+      if (exit && exit.entryX != null && exit.entryY != null) {
+        console.log('[nav-gate]', JSON.stringify({
+          entry: [exit.entryX, exit.entryY],
+          code: exit.targetCode || '',
+          name: exit.targetName || ''
+        }))
+        this.scene.setExitGateAnchor({ x: exit.entryX, y: exit.entryY })
       }
     } catch (error) {
       // 未配置出场口时不画固定道口
@@ -313,9 +342,27 @@ Page({
     const points = route && route.polyline ? route.polyline : this.routePoints
     const target = (route && route.target) || this.targetPoint || points[points.length - 1]
     this.routePoints = points || []
-    this.targetPoint = target
-      ? { longitude: target.longitude, latitude: target.latitude }
+    this.targetPoint = target && target.x != null && target.y != null
+      ? { x: Number(target.x), y: Number(target.y) }
       : null
+    if (session.selfPoint) this.applySelfPoint(session.selfPoint)
+    maybeForceRerouteIfRoadMismatch(this)
+    const roads = this.yardMapData && this.yardMapData.roads
+    const p0 = points && points[0]
+    const p1 = points && points[1]
+    let snapSelf = null
+    if (roads && this.self) {
+      snapSelf = yardScene.snapPositionToRoad(roads, this.self.x, this.self.y)
+    }
+    console.log('[nav-route]', JSON.stringify({
+      polyLen: points ? points.length : 0,
+      p0: p0 ? [p0.x, p0.y] : null,
+      p1: p1 ? [p1.x, p1.y] : null,
+      target: this.targetPoint ? [this.targetPoint.x, this.targetPoint.y] : null,
+      distM: route && route.distanceMeters,
+      selfRoad: snapSelf && snapSelf.road ? snapSelf.road : null,
+      selfSnapM: snapSelf && snapSelf.distM != null ? Math.round(snapSelf.distM * 10) / 10 : null
+    }))
 
     const sessionId = session.id || this.sessionId
     const targetName = displayAreaText(session.targetName || '')
@@ -589,7 +636,7 @@ Page({
       const location = await locationUtil.getCurrentLocation()
       this.applySelf(location)
     } catch (error) {
-      if (!this.self) {
+      if (!this.gps) {
         wx.showToast({ title: error.message, icon: 'none' })
         return
       }
@@ -615,6 +662,10 @@ Page({
     }
   },
 
+  /**
+   * 刷新航向与定位质量。定位点本身不在这里换算——场区坐标只认后端
+   * 按三点定标算出来的 selfPoint，见 applySelfPoint。
+   */
   applySelf(location) {
     const gpsHeading = location.direction > 0 ? location.direction : null
     const sensorHeading = headingSensor.get()
@@ -624,38 +675,60 @@ Page({
     const heading = headingFrom === 'compass'
       ? this.compassHeading
       : (gpsHeading != null ? gpsHeading : (this.self && this.self.heading != null ? this.self.heading : 0))
-    const next = {
+    this.gps = {
       longitude: location.longitude,
       latitude: location.latitude,
-      heading,
-      headingFrom,
       accuracy: location.accuracy,
-      speed: location.speed
+      speed: location.speed,
+      direction: location.direction
     }
-    // 过滤弱定位下的跳点，减轻小车「一直在抖」
     if (this.self) {
-      const mLon = Math.cos((next.latitude * Math.PI) / 180) * 111320
-      const dx = (next.longitude - this.self.longitude) * mLon
-      const dy = (next.latitude - this.self.latitude) * 111320
-      const dist = Math.hypot(dx, dy)
+      this.self = {
+        ...this.self,
+        heading,
+        headingFrom,
+        accuracy: location.accuracy,
+        speed: location.speed
+      }
+      this.syncScene()
+    }
+    this.refreshLocationUi(location)
+  },
+
+  /**
+   * @param {{x:number, y:number}} point 后端已吸附到车道的场区米制坐标
+   *
+   * 这里不再本地贴路：后端吸附时已按单/双向和车头朝向挪到了车道中心，
+   * 再吸一次会把双向路的靠右偏移拉回路中间。
+   */
+  applySelfPoint(point) {
+    if (!point || point.x == null || point.y == null) return
+    const next = {
+      ...(this.self || {}),
+      x: Number(point.x),
+      y: Number(point.y)
+    }
+    // 弱定位下的小幅跳点不挪车，减轻「一直在抖」
+    if (this.self && this.self.x != null) {
+      const dist = Math.hypot(next.x - this.self.x, next.y - this.self.y)
       const accuracy = next.accuracy || 50
-      if (dist < 1.2) {
-        // 几乎没动：只刷新精度文案，航向仍按指南针/GPS 更新
-        next.longitude = this.self.longitude
-        next.latitude = this.self.latitude
-      } else if (accuracy > 35 && dist < 6) {
-        next.longitude = this.self.longitude
-        next.latitude = this.self.latitude
+      if (dist < 1.2 || (accuracy > 35 && dist < 6)) {
+        next.x = this.self.x
+        next.y = this.self.y
       }
     }
     this.self = next
     this.syncScene()
+  },
+
+  refreshLocationUi(location) {
     const road = yardScene.nearestRoad(this.yardMapData && this.yardMapData.roads, this.self)
     const against = headingAgainstOneWay(this.self, road)
     const remainM = pickRemainingMeters(this, this.data.session, null)
+    const accuracy = (location && location.accuracy) || 99
     const patch = {
-      locationQuality: (next.accuracy || 99) <= 30 ? '正常' : '较弱',
-      locationQualityClass: (next.accuracy || 99) <= 30 ? 'quality-good' : 'quality-weak',
+      locationQuality: accuracy <= 30 ? '正常' : '较弱',
+      locationQualityClass: accuracy <= 30 ? 'quality-good' : 'quality-weak',
       speedLimit: road && road.speedLimitKmh ? String(Math.round(road.speedLimitKmh)) : '',
       oneWayHint: against
         ? `${road.edgeName || '当前路段'}逆行`
@@ -681,7 +754,9 @@ Page({
 
   startLocationUpdates() {
     locationUtil.startLocationUpdate()
-      .then(() => wx.onLocationChange(this.locationListener))
+      .then(() => {
+        this.locationWatcher = locationUtil.watchLocation(this.locationListener)
+      })
       .catch(() => wx.showModal({
         title: '需要定位权限',
         content: '导航期间需要持续获取当前位置，请允许定位权限。',
@@ -690,10 +765,8 @@ Page({
   },
 
   stopLocationUpdates() {
-    if (this.locationListener) {
-      wx.offLocationChange(this.locationListener)
-    }
-    wx.stopLocationUpdate()
+    locationUtil.unwatchLocation(this.locationListener, this.locationWatcher)
+    this.locationWatcher = null
   },
 
   handleCompass(res) {
@@ -726,30 +799,41 @@ Page({
       if (this.ended) return
       const forceReroute = Boolean(this._forceRerouteOnce)
       this._forceRerouteOnce = false
-      const displayRoad = yardScene.nearestRoad(this.yardMapData && this.yardMapData.roads, this.self)
-      // 规划必须跟车上看到的点一致：画面用过滤后的 self，不能再拿下一跳原始 GPS
-      const reportLoc = this.self ? {
-        longitude: this.self.longitude,
-        latitude: this.self.latitude,
-        accuracy: location.accuracy,
-        speed: location.speed,
-        direction: location.direction
-      } : location
+      // 上报的是原始 GPS：换算成场区坐标是后端三点定标的事，客户端只补一条
+      // 「我贴在哪条路上」，让规划起点和画面里的车保持同一段路。
+      const roads = this.yardMapData && this.yardMapData.roads
+      const onRoad = roads && roads.length && this.self
+        ? yardScene.snapPositionToRoad(roads, this.self.x, this.self.y)
+        : null
+      maybeForceRerouteIfRoadMismatch(this)
+      const rp0 = (this.routePoints || [])[0]
+      const distToP0 = rp0 && this.self
+        ? Math.hypot(rp0.x - this.self.x, rp0.y - this.self.y)
+        : null
       console.log('[nav-plan]', JSON.stringify({
-        raw: [location.longitude, location.latitude, location.accuracy],
-        self: this.self ? [this.self.longitude, this.self.latitude] : null,
-        road: displayRoad ? {
-          name: displayRoad.edgeName || displayRoad.roadName || '',
-          dir: displayRoad.directionType
+        gps: [location.longitude, location.latitude, location.accuracy],
+        selfYard: this.self ? [this.self.x, this.self.y] : null,
+        snap: onRoad ? {
+          snapped: onRoad.snapped,
+          distM: onRoad.distM != null ? Math.round(onRoad.distM * 10) / 10 : null,
+          road: onRoad.road || null,
+          sentEdge: (onRoad.road && (onRoad.road.edgeCode || onRoad.road.name)) || ''
         } : null,
+        routeP0Yard: rp0 ? [rp0.x, rp0.y] : null,
+        distToRouteP0M: distToP0 != null ? Math.round(distToP0) : null,
         forceReroute
       }))
       const response = await request({
         url: `/navigation/mobile/sessions/${this.sessionId}/locations`,
         method: 'POST',
-        data: locationUtil.toReport(reportLoc, this.self && this.self.heading, { forceReroute })
+        data: locationUtil.toReport(location, this.self && this.self.heading, {
+          forceReroute,
+          snapEdgeCode: onRoad && onRoad.road && onRoad.road.edgeCode,
+          snapEdgeName: onRoad && onRoad.road && onRoad.road.name
+        })
       })
       if (this.ended) return
+      if (response.selfPoint) this.applySelfPoint(response.selfPoint)
       if (response.route) {
         this.applySession(response)
       } else {
@@ -787,8 +871,8 @@ Page({
             data: {
               exceptionType: types[result.tapIndex],
               description: items[result.tapIndex],
-              longitude: this.self ? this.self.longitude : undefined,
-              latitude: this.self ? this.self.latitude : undefined
+              longitude: this.gps ? this.gps.longitude : undefined,
+              latitude: this.gps ? this.gps.latitude : undefined
             }
           })
           wx.showToast({ title: '异常已上报', icon: 'success' })

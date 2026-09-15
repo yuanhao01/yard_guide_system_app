@@ -1,8 +1,10 @@
 <view class="login-page">
-  <view class="brand">
-    <view class="brand-mark">场</view>
-    <view class="brand-title">堆场引导系统</view>
-    <view class="brand-subtitle">{{loginKind === 'driver' ? '集卡司机输入车牌并选择堆场即可进场' : '现场岗位使用电脑端账号登录'}}</view>
+  <view class="hero">
+    <view class="brand">
+      <view class="brand-mark">场</view>
+      <view class="brand-title">堆场引导系统</view>
+      <view class="brand-subtitle">{{loginKind === 'driver' ? '集卡司机输入车牌并选择堆场即可进场' : '现场岗位使用电脑端账号登录'}}</view>
+    </view>
   </view>
 
   <view class="login-card">

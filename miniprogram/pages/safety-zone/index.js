@@ -66,12 +66,16 @@ Page({
     this.setData({ statusBarHeight: (windowInfo && windowInfo.statusBarHeight) || 20 })
     this.jobSessionId = options.jobSessionId || ''
     this.sessionId = options.sessionId || ''
+    // self 是场区米制坐标（后端 selfPoint），gps 是原始定位，只用于上报
     this.self = null
+    this.gps = null
+    this.heading = null
     this.scene = null
     this.ended = false
     this.lastReportTime = 0
     this.locationListener = location => this.handleLocation(location)
     this.offHeading = headingSensor.onChange(deg => {
+      this.heading = deg
       if (this.self) this.self = { ...this.self, heading: deg, headingFrom: 'compass' }
       if (this.scene && this.scene.setHeading) this.scene.setHeading(deg)
     })
@@ -90,8 +94,8 @@ Page({
 
   onUnload() {
     this.ended = true
-    if (this.locationListener) wx.offLocationChange(this.locationListener)
-    wx.stopLocationUpdate()
+    locationUtil.unwatchLocation(this.locationListener, this.locationWatcher)
+    this.locationWatcher = null
     if (this.offHeading) this.offHeading()
     headingSensor.stop()
     if (this.scene) {
@@ -134,7 +138,8 @@ Page({
         this.session = await specialNav.startSpecialNav({
           purpose: 'safety',
           parentSessionId: (job && (job.jobSessionId || job.id)) || this.jobSessionId,
-          task: job
+          task: job,
+          heading: headingSensor.get()
         })
         this.sessionId = this.session.id
         this.jobSessionId = this.session.jobSessionId || this.jobSessionId
@@ -149,11 +154,16 @@ Page({
         cntrSize: this.session.cntrSize || ''
       })
       await this.loadYardMap(this.session.cyId)
+      if (this.session.selfPoint) this.applySelfPoint(this.session.selfPoint)
       const location = await locationUtil.getCurrentLocation()
       this.applySelf(location)
       locationUtil.startLocationUpdate()
-        .then(() => wx.onLocationChange(this.locationListener))
+        .then(() => {
+          this.locationWatcher = locationUtil.watchLocation(this.locationListener)
+        })
         .catch(() => {})
+      this.lastReportTime = 0
+      await this.handleLocation(location)
     } catch (error) {
       this.setData({ mapError: error.message || '无法进入安全操作区', mapLoading: false })
     }
@@ -188,18 +198,27 @@ Page({
     }
   },
 
+  /** 只更新航向；场区坐标等后端 selfPoint 回来再落图。 */
   applySelf(location) {
     if (headingSensor.get() == null && location.direction > 0 && headingSensor.seed) {
       headingSensor.seed(location.direction)
     }
+    this.gps = location
+    this.heading = headingSensor.get() != null
+      ? headingSensor.get()
+      : (location.direction > 0 ? location.direction : (this.heading != null ? this.heading : 0))
+    if (this.self) this.applySelfPoint(this.self)
+  },
+
+  /** @param {{x:number, y:number}} point 后端按三点定标换算出的场区米制坐标 */
+  applySelfPoint(point) {
+    if (!point || point.x == null || point.y == null) return
     this.self = {
-      longitude: location.longitude,
-      latitude: location.latitude,
-      heading: headingSensor.get() != null
-        ? headingSensor.get()
-        : (location.direction > 0 ? location.direction : (this.self && this.self.heading != null ? this.self.heading : 0)),
-      accuracy: location.accuracy,
-      speed: location.speed
+      x: Number(point.x),
+      y: Number(point.y),
+      heading: this.heading || 0,
+      accuracy: this.gps && this.gps.accuracy,
+      speed: this.gps && this.gps.speed
     }
     if (this.scene) this.scene.setSelf(this.self)
     const instruction = pickSafetyInstruction(this, this.data.instruction)
@@ -221,8 +240,9 @@ Page({
       const response = await request({
         url: `/navigation/mobile/sessions/${this.sessionId}/locations`,
         method: 'POST',
-        data: locationUtil.toReport(location, this.self && this.self.heading)
+        data: locationUtil.toReport(location, this.heading)
       })
+      if (response.selfPoint) this.applySelfPoint(response.selfPoint)
       if (response.route && this.scene) {
         this.routePoints = response.route.polyline || this.routePoints
         this.scene.setRoute(this.routePoints)

@@ -43,6 +43,7 @@ async function startSpecialNav(options) {
       parentSessionId: options.parentSessionId,
       longitude: location.longitude,
       latitude: location.latitude,
+      direction: locationUtil.headingOf(location, options.heading),
       ...copyTaskFields(options.task)
     }
   })

@@ -196,7 +196,8 @@ Page({
           cntrSize: this.data.cntrSize || '',
           cntrCondition: '好箱',
           longitude: location.longitude,
-          latitude: location.latitude
+          latitude: location.latitude,
+          direction: locationUtil.headingOf(location)
         }
       })
       getApp().globalData.selectedTarget = null
