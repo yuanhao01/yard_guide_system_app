@@ -127,7 +127,7 @@ Page({
     viewAdjusted: false,
     locating: false,
     statusBarHeight: 20,
-    flatMode: false,
+    flatMode: true,
     compassRotate: 0
   },
 
@@ -193,6 +193,10 @@ Page({
           this.canvasHeight = item.height
           try {
             this.scene = yardScene.createYardScene(canvas, item.width, item.height, dpr)
+            if (this.scene.setFlatMode) {
+              this.scene.setFlatMode(true)
+              this.setData({ flatMode: true })
+            }
           } catch (error) {
             this.setData({ mapError: '三维引擎初始化失败：' + (error.message || error) })
           }
@@ -293,7 +297,14 @@ Page({
     const points = route && route.polyline ? route.polyline : this.routePoints
     const target = (route && route.target) || this.targetPoint || points[points.length - 1]
     this.routePoints = points || []
-    this.targetPoint = target || null
+    this.targetPoint = target
+      ? {
+          longitude: target.longitude,
+          latitude: target.latitude,
+          entryLongitude: session.targetEntryLongitude,
+          entryLatitude: session.targetEntryLatitude
+        }
+      : null
 
     const sessionId = session.id || this.sessionId
     const targetName = displayAreaText(session.targetName || '')

@@ -101,6 +101,8 @@ function createCollabSocket(memberCode, handlers) {
         on.onMessage(payload.content)
       } else if (payload.type === 'COLLAB_PRESENCE' && on.onPresence) {
         on.onPresence(payload.content)
+      } else if (payload.type === 'COLLAB_READ' && on.onRead) {
+        on.onRead(payload.content)
       }
     })
 

@@ -175,6 +175,25 @@
   justify-content: space-between;
 }
 
+.collab-head-right {
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
+}
+
+.collab-unread {
+  min-width: 36rpx;
+  height: 36rpx;
+  padding: 0 10rpx;
+  border-radius: 18rpx;
+  background: #ff4d4f;
+  color: #ffffff;
+  font-size: 20rpx;
+  font-weight: 700;
+  line-height: 36rpx;
+  text-align: center;
+}
+
 .collab-tag {
   padding: 4rpx 14rpx;
   border-radius: 8rpx;

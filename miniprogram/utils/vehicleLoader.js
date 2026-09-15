@@ -259,9 +259,10 @@ function parseGlb(buffer) {
           : null,
         color: packColor(factor),
         opacity: factor[3] != null ? factor[3] : 1,
-        metalness: pbr.metallicFactor != null ? pbr.metallicFactor : 1,
-        roughness: pbr.roughnessFactor != null ? pbr.roughnessFactor : 1,
-        doubleSided: Boolean(mat.doubleSided),
+        // 与 obj_to_glb 一致：无 IBL 时默认金属度不能为 1，否则侧面死黑
+        metalness: pbr.metallicFactor != null ? pbr.metallicFactor : 0.08,
+        roughness: pbr.roughnessFactor != null ? pbr.roughnessFactor : 0.62,
+        doubleSided: mat.doubleSided !== false,
         alphaMode: mat.alphaMode || 'OPAQUE',
         maps: {
           base: textureRef(pbr.baseColorTexture),
@@ -562,6 +563,31 @@ function makeTexture(THREE, canvas, ref, srgb) {
 }
 
 /**
+ * 堆场 canvas 无环境贴图，PBR 金属度/透明参数需压到户外可视范围。
+ */
+function resolveMaterialParams(part, opts) {
+  const options = opts || {}
+  const outdoor = options.outdoor !== false && !options.envMap
+  let opacity = part.opacity != null ? part.opacity : 1
+  let alphaMode = part.alphaMode || 'OPAQUE'
+  if (options.opaqueGlass && alphaMode !== 'OPAQUE') {
+    alphaMode = 'OPAQUE'
+    opacity = 1
+  }
+  let metalness = part.metalness != null ? part.metalness : 0.08
+  let roughness = part.roughness != null ? part.roughness : 0.62
+  if (outdoor) {
+    metalness = Math.min(Math.max(metalness, 0), 0.28)
+    if (metalness > 0.14) metalness = 0.1
+    roughness = Math.min(1, Math.max(roughness, 0.4))
+  }
+  let doubleSided = part.doubleSided !== false
+  if (options.forceDoubleSide) doubleSided = true
+  const transparent = alphaMode === 'BLEND' || (opacity < 0.98 && alphaMode !== 'OPAQUE')
+  return { opacity, alphaMode, metalness, roughness, doubleSided, transparent }
+}
+
+/**
  * 建材质。
  * 带贴图/PBR 参数的走 MeshStandardMaterial；
  * 没有贴图的老烘焙模型退到 MeshLambertMaterial——至少受光，有明暗过渡，
@@ -572,25 +598,24 @@ function buildMaterial(THREE, part, options) {
   const canvas = opts.canvas
   const maps = part.maps || {}
   const hasTexture = Boolean(maps.base || maps.normal || maps.metalRough || maps.emissive)
-  const opacity = part.opacity != null ? part.opacity : 1
-  const transparent = part.alphaMode === 'BLEND' || opacity < 1
+  const params = resolveMaterialParams(part, opts)
   const common = { color: part.color }
-  if (transparent) {
+  if (params.transparent) {
     common.transparent = true
-    common.opacity = opacity
+    common.opacity = params.opacity
   }
 
   if (!hasTexture) {
-    // 老模型没有 doubleSided 字段，保持双面，避免历史绕序问题又露面
-    common.side = part.doubleSided === false ? THREE.FrontSide : THREE.DoubleSide
+    common.side = params.doubleSided ? THREE.DoubleSide : THREE.FrontSide
     if (opts.unlit) return new THREE.MeshBasicMaterial(common)
     return new THREE.MeshLambertMaterial(common)
   }
 
-  common.side = part.doubleSided ? THREE.DoubleSide : THREE.FrontSide
+  common.side = params.doubleSided ? THREE.DoubleSide : THREE.FrontSide
+  const outdoor = opts.outdoor !== false && !opts.envMap
   const mat = new THREE.MeshStandardMaterial(Object.assign(common, {
-    metalness: part.metalness != null ? part.metalness : 1,
-    roughness: part.roughness != null ? part.roughness : 1
+    metalness: params.metalness,
+    roughness: params.roughness
   }))
   const baseMap = makeTexture(THREE, canvas, maps.base, true)
   if (baseMap) mat.map = baseMap
@@ -603,8 +628,8 @@ function buildMaterial(THREE, part, options) {
   const mrMap = makeTexture(THREE, canvas, maps.metalRough, false)
   if (mrMap) {
     // glTF 把金属度存在 B 通道、粗糙度存在 G 通道，共用一张图
-    mat.metalnessMap = mrMap
     mat.roughnessMap = mrMap
+    if (!outdoor) mat.metalnessMap = mrMap
   }
   const aoMap = makeTexture(THREE, canvas, maps.occlusion, false)
   if (aoMap) mat.aoMap = aoMap
@@ -712,9 +737,16 @@ function createVignette(canvas, width, height, dpr, THREE, parts, kind) {
     lane.rotation.x = -Math.PI / 2
     lane.position.y = 0.02
     root.add(lane)
+    const centerLine = new THREE.Mesh(
+      new THREE.PlaneGeometry(0.18, 16),
+      new THREE.MeshBasicMaterial({ color: 0xfacc15 })
+    )
+    centerLine.rotation.x = -Math.PI / 2
+    centerLine.position.set(0, 0.03, 0)
+    root.add(centerLine)
     const highlight = new THREE.Mesh(
       new THREE.PlaneGeometry(4.4, 12),
-      new THREE.MeshBasicMaterial({ color: 0x2563eb, transparent: true, opacity: 0.14 })
+      new THREE.MeshBasicMaterial({ color: 0x2563eb, transparent: true, opacity: 0.12 })
     )
     highlight.rotation.x = -Math.PI / 2
     highlight.position.set(-1.8, 0.04, 0)
@@ -724,6 +756,17 @@ function createVignette(canvas, width, height, dpr, THREE, parts, kind) {
     truck.rotation.y = 0
     truck.scale.setScalar(0.55)
     root.add(truck)
+    if (parts.stacker && parts.stacker.length) {
+      try {
+        const stacker = instantiate(THREE, parts.stacker)
+        stacker.position.set(3.8, 0, -1.2)
+        stacker.rotation.y = -Math.PI * 0.42
+        stacker.scale.setScalar(0.4)
+        root.add(stacker)
+      } catch (e) {
+        // 堆高机模型未就绪时仅展示集卡
+      }
+    }
     ;[-6.6, 6.6].forEach(x => {
       for (let i = 0; i < 3; i += 1) {
         for (let t = 0; t < 3; t += 1) {

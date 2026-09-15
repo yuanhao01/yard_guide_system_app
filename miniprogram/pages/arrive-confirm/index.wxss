@@ -5,13 +5,35 @@
 }
 
 .hero {
-  padding: 36rpx 40rpx 100rpx;
   color: #fff;
-  background: linear-gradient(145deg, #0f2c50, #1a4a7a 70%, #1268e8);
+  background: linear-gradient(145deg, #0f2c50 0%, #1a4a7a 72%, #1268e8 140%);
+}
+
+.hero-inner {
+  position: relative;
+  display: flex;
+  align-items: center;
+  min-height: 96rpx;
+  padding: 12rpx 28rpx 108rpx;
+  overflow: hidden;
+}
+
+.hero-back {
+  z-index: 1;
+  width: 56rpx;
+  font-size: 52rpx;
+  font-weight: 300;
+  line-height: 1;
+}
+
+.hero-text {
+  z-index: 1;
+  flex: 1;
+  min-width: 0;
 }
 
 .hero-title {
-  font-size: 42rpx;
+  font-size: 40rpx;
   font-weight: 700;
 }
 
@@ -21,9 +43,22 @@
   font-size: 24rpx;
 }
 
+.hero-deco {
+  position: absolute;
+  right: -16rpx;
+  bottom: 24rpx;
+  width: 200rpx;
+  height: 128rpx;
+  border-radius: 48rpx 0 0 88rpx;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.02));
+  pointer-events: none;
+}
+
 .card {
-  margin: -70rpx 28rpx 0;
-  padding: 36rpx 32rpx;
+  position: relative;
+  z-index: 2;
+  margin: -88rpx 28rpx 0;
+  padding: 36rpx 32rpx 32rpx;
   border-radius: 28rpx;
   background: #fff;
   box-shadow: 0 16rpx 40rpx rgba(15, 44, 80, 0.12);
@@ -35,6 +70,7 @@
 }
 
 .ok-badge {
+  flex-shrink: 0;
   width: 72rpx;
   height: 72rpx;
   margin-right: 20rpx;
@@ -62,9 +98,9 @@
 .scene-wrap {
   position: relative;
   margin-top: 28rpx;
-  height: 320rpx;
+  height: 380rpx;
   overflow: hidden;
-  border-radius: 18rpx;
+  border-radius: 16rpx;
   background: #dbe4ee;
 }
 
@@ -73,34 +109,90 @@
   height: 100%;
 }
 
+.scene-overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
 .scene-tag {
   position: absolute;
-  top: 16rpx;
+  top: 22%;
   left: 50%;
-  transform: translateX(-120rpx);
-  padding: 6rpx 14rpx;
-  border-radius: 8rpx;
+  transform: translateX(-50%);
+  padding: 8rpx 18rpx;
+  border-radius: 10rpx;
   color: #1d4ed8;
-  background: rgba(255, 255, 255, 0.92);
-  font-size: 20rpx;
+  background: rgba(255, 255, 255, 0.96);
+  font-size: 22rpx;
   font-weight: 700;
+  box-shadow: 0 4rpx 12rpx rgba(15, 44, 80, 0.08);
+}
+
+.scene-tag-tail {
+  position: absolute;
+  left: 50%;
+  bottom: -10rpx;
+  width: 0;
+  height: 0;
+  margin-left: -10rpx;
+  border-top: 12rpx solid rgba(255, 255, 255, 0.96);
+  border-right: 10rpx solid transparent;
+  border-left: 10rpx solid transparent;
+}
+
+.parking-box {
+  position: absolute;
+  top: 38%;
+  left: 50%;
+  width: 132rpx;
+  height: 248rpx;
+  transform: translateX(-58%);
+  border: 3rpx dashed #2563eb;
+  border-radius: 8rpx;
+  box-sizing: border-box;
 }
 
 .meta {
   margin-top: 32rpx;
-  padding-top: 24rpx;
-  border-top: 1rpx solid #eef2f6;
+  padding-top: 8rpx;
 }
 
 .meta-item {
   display: flex;
+  align-items: center;
   justify-content: space-between;
-  margin-bottom: 18rpx;
+  margin-bottom: 22rpx;
   font-size: 26rpx;
 }
 
+.meta-left {
+  display: flex;
+  align-items: center;
+}
+
+.meta-icon {
+  width: 36rpx;
+  height: 36rpx;
+  margin-right: 14rpx;
+  border-radius: 50%;
+  background: #e8f1fc;
+}
+
+.meta-icon-time {
+  background: #e8f1fc radial-gradient(circle at 50% 55%, #1268e8 0, #1268e8 28%, transparent 30%);
+}
+
+.meta-icon-check {
+  background: #e6f4ed radial-gradient(circle at 50% 55%, #18a05a 0, #18a05a 28%, transparent 30%);
+}
+
+.meta-icon-gps {
+  background: #fef3e2 radial-gradient(circle at 50% 55%, #f59e0b 0, #f59e0b 28%, transparent 30%);
+}
+
 .meta-cap {
-  color: #94a3b8;
+  color: #64748b;
 }
 
 .meta-val {
@@ -112,16 +204,9 @@
   color: #18a05a;
 }
 
-.meta-src {
-  margin: -10rpx 0 12rpx;
-  color: #94a3b8;
-  font-size: 20rpx;
-  text-align: right;
-}
-
 .tip {
-  margin-top: 12rpx;
-  padding: 18rpx;
+  margin-top: 8rpx;
+  padding: 18rpx 20rpx;
   border-radius: 12rpx;
   color: #1268e8;
   background: #e8f1fc;
@@ -134,7 +219,8 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  margin: 28rpx 28rpx 0;
+  margin: 28rpx 0 0;
+  width: 100%;
   height: 92rpx;
   padding: 0;
   border-radius: 18rpx;
@@ -154,9 +240,16 @@
   background: #18a05a;
 }
 
+.btn-icon {
+  margin-right: 12rpx;
+  font-size: 34rpx;
+  font-weight: 400;
+}
+
 .secondary {
   color: #1268e8;
-  background: #e8f1fc;
+  background: #fff;
+  border: 2rpx solid #c7daf5 !important;
 }
 
 .steps {
@@ -164,7 +257,7 @@
   align-items: center;
   justify-content: center;
   margin-top: 48rpx;
-  padding: 0 32rpx;
+  padding: 0 40rpx;
 }
 
 .step {
@@ -199,8 +292,8 @@
 }
 
 .step-line {
-  width: 40rpx;
+  width: 48rpx;
   height: 2rpx;
-  margin: 0 10rpx;
+  margin: 0 12rpx;
   background: #dbe3ee;
 }

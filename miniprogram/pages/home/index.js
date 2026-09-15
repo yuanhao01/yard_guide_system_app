@@ -41,14 +41,19 @@ function describeSession(session) {
 
 function mapGroupCard(group) {
   const members = group.members || []
+  const unread = Number(group.unreadCount) || 0
   return {
     id: group.id,
     sessionId: group.sessionId,
     title: group.groupName || group.taskLabel || '现场协同群',
-    desc: group.statusText
+    desc: group.lastMsgPreview
+      || group.statusText
       || (group.onlineCount != null
         ? `${group.onlineCount}/${group.memberCount || group.onlineCount}人在线`
         : '点进群聊查看现场成员'),
+    lastMsgTimeText: group.lastMsgTimeText || '',
+    unreadCount: unread,
+    unreadText: unread > 99 ? '99+' : String(unread),
     memberText: members.map(item => item.memberName || item.displayName).filter(Boolean).join(' · ')
   }
 }

@@ -31,7 +31,10 @@
     >
       <view class="collab-head">
         <view class="collab-tag">任务协同</view>
-        <view class="collab-status">进行中</view>
+        <view class="collab-head-right">
+          <view class="collab-unread" wx:if="{{item.unreadCount > 0}}">{{item.unreadText}}</view>
+          <view class="collab-status">进行中</view>
+        </view>
       </view>
       <view class="collab-title">{{item.title}}</view>
       <view class="collab-desc">{{item.desc}}</view>
@@ -68,7 +71,10 @@
     <view wx:if="{{collabGroup}}" class="collab-card" bindtap="openCollabGroup">
       <view class="collab-head">
         <view class="collab-tag">任务协同</view>
-        <view class="collab-status">进行中</view>
+        <view class="collab-head-right">
+          <view class="collab-unread" wx:if="{{collabGroup.unreadCount > 0}}">{{collabGroup.unreadText}}</view>
+          <view class="collab-status">进行中</view>
+        </view>
       </view>
       <view class="collab-title">{{collabGroup.title}}</view>
       <view class="collab-desc">{{collabGroup.desc}}</view>

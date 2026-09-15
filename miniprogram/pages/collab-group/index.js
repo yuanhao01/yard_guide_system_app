@@ -8,6 +8,7 @@ const { createCollabSocket } = require('../../utils/collabSocket')
  * GET  /navigation/mobile/sessions/{sessionId}/collab
  * GET  /navigation/mobile/collab/{groupId}/messages?sinceSeq=
  * POST /navigation/mobile/collab/{groupId}/messages
+ * POST /navigation/mobile/collab/{groupId}/read
  *
  * 消息走 WebSocket 实时推送，在线人数由各成员的连接状态决定；
  * 断线期间可能漏推，重连后用 sinceSeq 补齐。
@@ -143,12 +144,16 @@ Page({
     this.groupId = options.groupId || null
     this.lastMessageId = null
     this.lastMessageSeq = null
+    this._lastMarkedSeq = null
+    this._foreground = true
     this.socket = null
     this._onAppHide = () => {
+      this._foreground = false
       this.stopPoll()
       this.closeSocket()
     }
     this._onAppShow = () => {
+      this._foreground = true
       if (this.socket) this.socket.open()
       this.pullNewMessages()
       this.startPoll()
@@ -159,6 +164,7 @@ Page({
   },
 
   onShow() {
+    this._foreground = true
     if (this.socket) {
       this.socket.open()
       this.pullNewMessages()
@@ -175,6 +181,10 @@ Page({
     if (this._onAppShow) wx.offAppShow(this._onAppShow)
     this.stopPoll()
     this.closeSocket()
+    if (this._markReadTimer) {
+      clearTimeout(this._markReadTimer)
+      this._markReadTimer = null
+    }
   },
 
   async loadDict() {
@@ -223,6 +233,7 @@ Page({
         ) || {}
         this.openSocket(selfCode, selfMember.id)
         this.startPoll()
+        this.scheduleMarkRead()
       }
     } catch (error) {
       this.setData({ loading: false, errorText: error.message || '协同群加载失败' })
@@ -246,6 +257,13 @@ Page({
           memberCount: presence.memberCount
         })
         this.refreshMembers(presence)
+      },
+      onRead: payload => {
+        if (!payload) return
+        const seq = Number(payload.readSeq)
+        if (Number.isFinite(seq)) {
+          this._lastMarkedSeq = Math.max(this._lastMarkedSeq || 0, seq)
+        }
       }
     })
     this.socket.open()
@@ -290,6 +308,7 @@ Page({
       messages: this.data.messages.concat([message]),
       scrollInto: `msg-${message.id}`
     })
+    this.scheduleMarkRead()
   },
 
   /** 断线重连后补齐这期间漏推的消息。 */
@@ -300,8 +319,36 @@ Page({
       const query = cursor != null ? `?sinceSeq=${cursor}` : ''
       const list = await request({ url: `/navigation/mobile/collab/${this.groupId}/messages${query}` })
       ;(list || []).forEach(item => this.appendMessage(item))
+      this.scheduleMarkRead()
     } catch (error) {
       // 补拉失败静默处理，避免打断司机操作
+    }
+  },
+
+  scheduleMarkRead() {
+    if (!this._foreground || !this.groupId || this.data.dissolved) return
+    const seq = this.lastMessageSeq
+    if (seq == null) return
+    if (this._lastMarkedSeq != null && seq <= this._lastMarkedSeq) return
+    if (this._markReadTimer) clearTimeout(this._markReadTimer)
+    this._markReadTimer = setTimeout(() => this.markRead(), 400)
+  },
+
+  async markRead() {
+    this._markReadTimer = null
+    if (!this._foreground || !this.groupId || this.data.dissolved) return
+    const seq = this.lastMessageSeq
+    if (seq == null) return
+    if (this._lastMarkedSeq != null && seq <= this._lastMarkedSeq) return
+    try {
+      await request({
+        url: `/navigation/mobile/collab/${this.groupId}/read`,
+        method: 'POST',
+        data: { seq }
+      })
+      this._lastMarkedSeq = seq
+    } catch (error) {
+      // 已读失败下次进群再补，不影响聊天
     }
   },
 

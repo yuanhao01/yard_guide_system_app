@@ -15,10 +15,11 @@ const STACK_HEIGHT = 7.8
 /** 单层集装箱高度（米），箱垛高度按堆放层数叠出来。 */
 const CNTR_LAYER_H = 2.75
 /** 俯仰角：相对水平面抬起的角度。越大越接近正俯视，越小越接近侧视（像高德 3D）。 */
-const DEFAULT_PITCH = 55 * Math.PI / 180
 const MIN_PITCH = 18 * Math.PI / 180
 const MAX_PITCH = 88 * Math.PI / 180
 const FLAT_PITCH = 86 * Math.PI / 180
+/** 默认接近正俯视，便于辨认场区/道路/空地；导航页可切 3D */
+const DEFAULT_PITCH = FLAT_PITCH
 const MIN_DISTANCE = 40
 const MAX_DISTANCE = 900
 
@@ -107,12 +108,12 @@ function createYardScene(canvas, width, height, dpr) {
   sun.position.set(140, 240, 90)
   scene.add(sun)
   // 逆光补一盏弱光，避免背面死黑
-  const fill = new THREE.DirectionalLight(0xcfe0f5, 0.28)
+  const fill = new THREE.DirectionalLight(0xcfe0f5, 0.38)
   fill.position.set(-120, 90, -140)
   scene.add(fill)
 
-  /** 传给 vehicleLoader 的材质选项：canvas 用来解码 GLB 内嵌贴图 */
-  const materialOpts = { canvas }
+  /** 传给 vehicleLoader：无 IBL 户外场景，玻璃不透明、双面渲染，避免集卡/箱发黑镂空 */
+  const materialOpts = { canvas, outdoor: true, forceDoubleSide: true, opaqueGlass: true }
 
   const root = new THREE.Group()
   scene.add(root)
@@ -428,7 +429,7 @@ function createYardScene(canvas, width, height, dpr) {
         ctx.closePath()
         ctx.fill()
       }
-      ctx.font = 'bold 22px sans-serif'
+      ctx.font = option.font || 'bold 22px sans-serif'
       ctx.textAlign = 'center'
       ctx.textBaseline = 'middle'
       ctx.fillStyle = colorHex || '#334155'
@@ -444,8 +445,10 @@ function createYardScene(canvas, width, height, dpr) {
       const sx = option.scaleX || 11
       const sy = option.scaleY || 2.8
       sprite.scale.set(sx, sy, 1)
-      sprite.userData.scaleWithView = true
-      sprite.userData.baseScale = { x: sx, y: sy, z: 1 }
+      if (!option.fixed) {
+        sprite.userData.scaleWithView = true
+        sprite.userData.baseScale = { x: sx, y: sy, z: 1 }
+      }
       return sprite
     } catch (error) {
       return null
@@ -897,12 +900,21 @@ function createYardScene(canvas, width, height, dpr) {
         }
       })
 
+      const outDir = Number(block.outDirection)
+      const roadOnLowV = outDir === 2 || outDir === 0 || Number.isNaN(outDir)
+      const vMark = roadOnLowV ? -0.058 : 1.058
       for (let i = 1; i <= slots; i += 1) {
         const slotNo = String(i * 2 - 1).padStart(2, '0')
-        const mark = cornerAt(corners, (i - 0.5) / slots, -0.14)
-        const spriteBay = makeTextSprite(slotNo, '#5b6570', { scaleX: 5.2, scaleY: 1.35, plate: false })
+        const mark = cornerAt(corners, (i - 0.5) / slots, vMark)
+        const spriteBay = makeTextSprite(slotNo, '#111827', {
+          scaleX: 5.6,
+          scaleY: 1.42,
+          plate: false,
+          fixed: true,
+          font: 'bold 32px sans-serif'
+        })
         if (spriteBay) {
-          spriteBay.position.set(mark.x, 0.55, mark.z)
+          spriteBay.position.set(mark.x, 0.34, mark.z)
           mapGroup.add(spriteBay)
         }
       }
@@ -1067,22 +1079,40 @@ function createYardScene(canvas, width, height, dpr) {
 
   /** 丢掉不沿道路的第一段（定位点斜接到旧折线、穿空地的飞线）。 */
   function dropOffRoadChords(points) {
-    if (!points || points.length < 2 || !state.map || !state.map.roads) return points || []
+    if (!points || points.length < 2) return points || []
     let start = 0
     while (start < points.length - 1 && chordOffRoad(points[start], points[start + 1])) {
       start += 1
     }
-    const trimmed = points.slice(start)
-    return trimmed.length >= 2 ? trimmed : points
+    let end = points.length
+    while (end > start + 1 && chordOffRoad(points[end - 2], points[end - 1])) {
+      end -= 1
+    }
+    const trimmed = points.slice(start, end)
+    if (trimmed.length < 2) return points
+    const filtered = [trimmed[0].clone ? trimmed[0].clone() : trimmed[0]]
+    for (let i = 1; i < trimmed.length; i += 1) {
+      const prev = filtered[filtered.length - 1]
+      const cur = trimmed[i]
+      if (chordOffRoad(prev, cur)) {
+        if (i === trimmed.length - 1) break
+        continue
+      }
+      if (prev.distanceTo(cur) > 0.6) {
+        filtered.push(cur.clone ? cur.clone() : cur)
+      }
+    }
+    return filtered.length >= 2 ? filtered : trimmed
   }
 
   function chordOffRoad(a, b) {
     if (!a || !b) return false
     const hop = a.distanceTo(b)
-    if (hop <= 15) return false
+    if (hop <= 12) return false
+    if (segmentHitsBlock(a, b)) return true
     const mid = a.clone().lerp(b, 0.5)
     const snap = nearestRoadSnap(mid)
-    return !snap || snap.dist > 8
+    return !snap || snap.dist > 7
   }
 
   /** 蓝线只留马路上的点，掐掉穿进箱区的头尾。 */
@@ -1236,26 +1266,30 @@ function createYardScene(canvas, width, height, dpr) {
       const offset = offsetPolylineRight(clipped, (idx, mid) => (
         isOneWayNear(mid) ? 0 : 2.7
       ))
-      const smoothed = filletPolyline(offset, 3.2)
+      const cornerSafe = dropOffRoadChords(offset)
+      const smoothed = filletPolyline(cornerSafe.length >= 2 ? cornerSafe : offset, 2.2)
+      const painted = dropOffRoadChords(smoothed)
+      const linePts = painted.length >= 2 ? painted : smoothed
       const blueW = 0.95
       const routeY = 0.52
-      buildRouteRibbon(smoothed, blueW, routeY, 0x1d6fe8, routeGroup)
-      state.routeEnd = smoothed[smoothed.length - 1]
-      state.routeLine = smoothed
-      const total = smoothed.reduce((sum, p, idx) => (
-        idx === 0 ? 0 : sum + smoothed[idx - 1].distanceTo(p)
+      buildRouteRibbon(linePts, blueW, routeY, 0x1d6fe8, routeGroup)
+      state.routeEnd = linePts[linePts.length - 1]
+      state.routeLine = linePts
+      buildCrossing()
+      const total = linePts.reduce((sum, p, idx) => (
+        idx === 0 ? 0 : sum + linePts[idx - 1].distanceTo(p)
       ), 0)
       const arrowCount = Math.min(18, Math.max(4, Math.floor(total / 16)))
       const arrowY = routeY + blueW * 0.5 + 0.018
       for (let i = 1; i <= arrowCount; i += 1) {
         const want = (total * i) / (arrowCount + 1)
         let acc = 0
-        for (let k = 0; k < smoothed.length - 1; k += 1) {
-          const seg = smoothed[k].distanceTo(smoothed[k + 1])
-          if (acc + seg >= want || k === smoothed.length - 2) {
+        for (let k = 0; k < linePts.length - 1; k += 1) {
+          const seg = linePts[k].distanceTo(linePts[k + 1])
+          if (acc + seg >= want || k === linePts.length - 2) {
             const t = seg < 0.01 ? 0 : (want - acc) / seg
-            const p = smoothed[k].clone().lerp(smoothed[k + 1], Math.max(0, Math.min(1, t)))
-            const tangent = smoothed[k + 1].clone().sub(smoothed[k])
+            const p = linePts[k].clone().lerp(linePts[k + 1], Math.max(0, Math.min(1, t)))
+            const tangent = linePts[k + 1].clone().sub(linePts[k])
             addRouteArrow(p, tangent, arrowY, routeGroup)
             break
           }
@@ -1282,10 +1316,145 @@ function createYardScene(canvas, width, height, dpr) {
     return truck
   }
 
+  /** 与 buildRoads 主路面层 y=0.24 一致，道口底座贴齐行车面 */
+  const ROAD_SURFACE_Y = 0.24
+
   /**
-   * 进出场道口。暂时摆在场区包围盒的东南角（俯视图右下），
-   * 等拿到闸口的真实坐标再按数据定位。
+   * dualChannelCrossing 源模左右车道岛底面 Y 不一致（约 0.11m），
+   * 右侧更低，整体贴地时右侧会像陷进地面；按水平方向分侧把低侧抬到与高侧一致。
    */
+  function levelCrossingPedestals(model) {
+    const items = []
+    model.traverse(child => {
+      if (!child.isMesh || !child.geometry) return
+      if (typeof child.geometry.computeBoundingBox === 'function') {
+        child.geometry.computeBoundingBox()
+      }
+      const box = child.geometry.boundingBox
+      if (!box) return
+      const sx = child.scale.x || 1
+      const sy = child.scale.y || 1
+      const sz = child.scale.z || 1
+      const cx = child.position.x + (box.min.x + box.max.x) * 0.5 * sx
+      const cz = child.position.z + (box.min.z + box.max.z) * 0.5 * sz
+      const footY = child.position.y + box.min.y * sy
+      items.push({ child, cx, cz, footY })
+    })
+    if (!items.length) return
+
+    const xs = items.map(item => item.cx)
+    const zs = items.map(item => item.cz)
+    const spanX = Math.max(...xs) - Math.min(...xs)
+    const spanZ = Math.max(...zs) - Math.min(...zs)
+    const useX = spanX >= spanZ
+    const coordOf = item => (useX ? item.cx : item.cz)
+    const coords = items.map(coordOf)
+    const mid = (Math.max(...coords) + Math.min(...coords)) / 2
+    const half = Math.max((Math.max(...coords) - Math.min(...coords)) / 2, 0.01)
+    const edge = Math.max(0.06, half * 0.18)
+
+    let leftFoot = Infinity
+    let rightFoot = Infinity
+    items.forEach((item, index) => {
+      const c = coords[index]
+      if (c <= mid - edge) leftFoot = Math.min(leftFoot, item.footY)
+      if (c >= mid + edge) rightFoot = Math.min(rightFoot, item.footY)
+    })
+    if (!Number.isFinite(leftFoot)) {
+      leftFoot = Math.min(...items.map(item => item.footY))
+    }
+    if (!Number.isFinite(rightFoot)) {
+      rightFoot = leftFoot
+    }
+    const lift = leftFoot - rightFoot
+    if (lift <= 0.005) return
+    items.forEach((item, index) => {
+      if (coords[index] >= mid + edge) {
+        item.child.position.y += lift
+      }
+    })
+  }
+
+  function alignModelFootToRoad(model, footY) {
+    const target = footY != null ? footY : ROAD_SURFACE_Y
+    model.updateMatrixWorld(true)
+    const box = new THREE.Box3().setFromObject(model)
+    if (!box || !Number.isFinite(box.min.y)) return
+    model.position.y += target - box.min.y
+  }
+
+  function isExitPurpose() {
+    return state.purpose === 'exit' || /出场|出口|EXIT/i.test(state.targetLabel || '')
+  }
+
+  /** 路线末段行车方向（世界坐标 XZ）。 */
+  function routeEndTangent() {
+    const line = state.routeLine || []
+    if (line.length >= 2) {
+      const a = line[line.length - 2]
+      const b = line[line.length - 1]
+      const t = new THREE.Vector3(b.x - a.x, 0, b.z - a.z)
+      if (t.length() > 0.05) return t.normalize()
+    }
+    const raw = routeWorldPoints()
+    if (raw.length >= 2) {
+      const a = raw[raw.length - 2]
+      const b = raw[raw.length - 1]
+      const t = new THREE.Vector3(b.x - a.x, 0, b.z - a.z)
+      if (t.length() > 0.05) return t.normalize()
+    }
+    return new THREE.Vector3(0, 0, 1)
+  }
+
+  /**
+   * 道口模型锚点：优先导航配置里的 entry；出场时相对路线终点再往前 18m，
+   * 避免「剩余 5m」时闸口模型与集卡重合。
+   */
+  function resolveCrossingAnchor() {
+    const exitMode = isExitPurpose()
+    const stop = destPoint()
+    const tangent = routeEndTangent()
+    const t = state.target || {}
+    const entryLng = t.entryLongitude != null ? Number(t.entryLongitude) : NaN
+    const entryLat = t.entryLatitude != null ? Number(t.entryLatitude) : NaN
+    if (Number.isFinite(entryLng) && Number.isFinite(entryLat)
+        && Math.abs(entryLng) > 1e-4 && Math.abs(entryLat) > 1e-4) {
+      const entry = toWorld(entryLng, entryLat, 0)
+      if (exitMode && stop) {
+        const along = new THREE.Vector3(entry.x - stop.x, 0, entry.z - stop.z)
+        if (along.length() > 0.5) {
+          return entry.clone().add(along.normalize().multiplyScalar(6))
+        }
+        return entry.clone().add(tangent.clone().multiplyScalar(18))
+      }
+      return entry
+    }
+    if (exitMode && stop) {
+      return stop.clone().add(tangent.clone().multiplyScalar(22))
+    }
+    if (stop) return stop.clone()
+    if (state.bounds) {
+      return toWorld(state.bounds.maxLng, state.bounds.minLat, 0)
+    }
+    return null
+  }
+
+  function updateCrossingVisibility() {
+    if (!crossing) return
+    if (!isExitPurpose()) {
+      crossing.visible = true
+      return
+    }
+    const stop = destPoint()
+    if (!stop || !state.self) {
+      crossing.visible = true
+      return
+    }
+    const truck = toWorld(state.self.longitude, state.self.latitude, 0)
+    const dStop = truck.distanceTo(stop)
+    crossing.visible = dStop > 8
+  }
+
   function buildCrossing() {
     if (crossing) {
       mapGroup.remove(crossing)
@@ -1294,14 +1463,20 @@ function createYardScene(canvas, width, height, dpr) {
     }
     const parts = vehicleLoader.getCrossingParts()
     if (!parts || !parts.length || !state.bounds) return
+    const anchor = resolveCrossingAnchor()
+    if (!anchor) return
     const model = vehicleLoader.instantiate(THREE, parts, materialOpts)
-    const corner = toWorld(state.bounds.maxLng, state.bounds.minLat, 0)
-    model.position.set(corner.x, 0, corner.z)
+    levelCrossingPedestals(model)
+    const tangent = routeEndTangent()
+    model.position.set(anchor.x, 0, anchor.z)
+    model.rotation.y = Math.atan2(tangent.x, tangent.z)
+    alignModelFootToRoad(model, ROAD_SURFACE_Y)
     model.traverse(child => {
-      if (child.isMesh) child.renderOrder = 2
+      if (child.isMesh) child.renderOrder = 3
     })
     crossing = model
     mapGroup.add(model)
+    updateCrossingVisibility()
   }
 
   function buildStacker(origin, yaw) {
@@ -1314,10 +1489,10 @@ function createYardScene(canvas, width, height, dpr) {
   }
 
   function destPoint() {
+    if (state.routeEnd) return state.routeEnd.clone()
     if (state.target && state.target.longitude != null && state.target.latitude != null) {
       return toWorld(state.target.longitude, state.target.latitude, 0)
     }
-    if (state.routeEnd) return state.routeEnd.clone()
     return null
   }
 
@@ -1481,48 +1656,47 @@ function createYardScene(canvas, width, height, dpr) {
     }
     truck.position.set(poseSmooth.x, 0.26, poseSmooth.z)
     truck.rotation.y = poseSmooth.yaw
+    updateCrossingVisibility()
   }
 
   function rebuildDynamic() {
     clearGroup(dynamicGroup)
     const dest = destPoint()
     if (dest) {
-      const pin = new THREE.Group()
-      const tail = new THREE.Mesh(
-        new THREE.ConeGeometry(0.78, 2.5, 20),
-        new THREE.MeshLambertMaterial({ color: 0x16a34a })
-      )
-      tail.position.y = 1.35
-      tail.rotation.x = Math.PI
-      const head = new THREE.Mesh(
-        new THREE.SphereGeometry(0.95, 20, 16),
-        new THREE.MeshLambertMaterial({ color: 0x16a34a })
-      )
-      head.position.y = 2.85
-      const dot = new THREE.Mesh(
-        new THREE.SphereGeometry(0.38, 14, 12),
-        new THREE.MeshBasicMaterial({ color: 0xffffff })
-      )
-      dot.position.y = 2.85
-      pin.add(tail)
-      pin.add(head)
-      pin.add(dot)
-      pin.position.set(dest.x, 0, dest.z)
-      pin.userData.scaleWithView = true
-      pin.userData.baseScale = { x: 1, y: 1, z: 1 }
-      dynamicGroup.add(pin)
-      // 验箱只认场区上的 S 区标签，终点不再叠绿框/写死「验箱区 S-02」
-      if (state.targetLabel && state.purpose !== 'safety') {
+      const exitDest = state.purpose === 'exit' || /出场|出口|EXIT/i.test(state.targetLabel || '')
+      // 出场口由道口模型标识；贴近时不要再叠高大图钉和「出场口」飘字（会糊在脸上）
+      if (!exitDest) {
+        const pin = new THREE.Group()
+        const tail = new THREE.Mesh(
+          new THREE.ConeGeometry(0.78, 2.5, 20),
+          new THREE.MeshLambertMaterial({ color: 0x16a34a })
+        )
+        tail.position.y = 1.35
+        tail.rotation.x = Math.PI
+        const head = new THREE.Mesh(
+          new THREE.SphereGeometry(0.95, 20, 16),
+          new THREE.MeshLambertMaterial({ color: 0x16a34a })
+        )
+        head.position.y = 2.85
+        const dot = new THREE.Mesh(
+          new THREE.SphereGeometry(0.38, 14, 12),
+          new THREE.MeshBasicMaterial({ color: 0xffffff })
+        )
+        dot.position.y = 2.85
+        pin.add(tail)
+        pin.add(head)
+        pin.add(dot)
+        pin.position.set(dest.x, 0, dest.z)
+        pin.userData.scaleWithView = true
+        pin.userData.baseScale = { x: 1, y: 1, z: 1 }
+        dynamicGroup.add(pin)
+      }
+      if (state.targetLabel && state.purpose !== 'safety' && !exitDest) {
         const tag = makeTextSprite(state.targetLabel, '#166534', { scaleX: 12, scaleY: 3 })
         if (tag) {
           tag.position.set(dest.x, 5.2, dest.z)
           dynamicGroup.add(tag)
         }
-      }
-      if (state.purpose === 'exit' || /出场|出口|EXIT/i.test(state.targetLabel || '')) {
-        const pad = makeUnlitBox(16, 0.14, 12, 0x4ade80)
-        pad.position.set(dest.x, 0.3, dest.z)
-        dynamicGroup.add(pad)
       }
     }
     if (state.self && state.purpose === 'job' && destPoint()) {
@@ -1684,8 +1858,10 @@ function createYardScene(canvas, width, height, dpr) {
       state.targetSlot = targetSlot
       rebuildMap()
     }
-    if (!sameTarget) rebuildDynamic()
-    else applySelfPose()
+    if (!sameTarget) {
+      buildCrossing()
+      rebuildDynamic()
+    } else applySelfPose()
   }
 
   function setSelf(self) {
@@ -1866,7 +2042,7 @@ function createYardScene(canvas, width, height, dpr) {
   function resetView() {
     state.userView = null
     state.headingUp = false
-    state.view.pitch = DEFAULT_PITCH
+    state.view.pitch = FLAT_PITCH
     state.dirty = true
   }
 
@@ -1961,6 +2137,7 @@ function createYardScene(canvas, width, height, dpr) {
     setFollowMode,
     setPurpose(purpose) {
       state.purpose = purpose || 'job'
+      buildCrossing()
       rebuildDynamic()
     },
     enableFollow,
