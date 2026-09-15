@@ -1,10 +1,13 @@
 .arrive-page {
+  box-sizing: border-box;
+  width: 100vw;
   min-height: 100vh;
-  padding-bottom: 48rpx;
+  padding-bottom: calc(48rpx + env(safe-area-inset-bottom));
   background: #eef2f7;
 }
 
 .hero {
+  width: 100%;
   color: #fff;
   background: linear-gradient(145deg, #0f2c50 0%, #1a4a7a 72%, #1268e8 140%);
 }
@@ -57,9 +60,9 @@
 .card {
   position: relative;
   z-index: 2;
-  margin: -88rpx 28rpx 0;
-  padding: 36rpx 32rpx 32rpx;
-  border-radius: 28rpx;
+  margin: -88rpx 0 0;
+  padding: 36rpx 32rpx calc(32rpx + env(safe-area-inset-bottom));
+  border-radius: 28rpx 28rpx 0 0;
   background: #fff;
   box-shadow: 0 16rpx 40rpx rgba(15, 44, 80, 0.12);
 }

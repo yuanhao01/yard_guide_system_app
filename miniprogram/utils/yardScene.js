@@ -4,7 +4,7 @@
  * 不用 canvas 2d 假倾斜。相机是透视投影，箱垛是真实 Box 网格，
  * 观感对齐高德地图那种挤出建筑：能看见侧面、有透视远近、能俯仰缩放。
  *
- * 世界坐标：X 东、Y 上、Z 南（-Z 为北），单位米。
+ * 世界坐标：X 东、Y 上、Z 南（与场图一致：Y/纬度向南增大），单位米。
  */
 const { createScopedThreejs } = require('../libs/threejs/index.js')
 const vehicleLoader = require('./vehicleLoader')
@@ -1437,8 +1437,7 @@ function createYardScene(canvas, width, height, dpr) {
       return
     }
     const truck = toWorld(state.self.longitude, state.self.latitude, 0)
-    const dStop = truck.distanceTo(stop)
-    crossing.visible = dStop > 8
+    crossing.visible = truck.distanceTo(stop) > 8
   }
 
   function buildCrossing() {
@@ -2152,6 +2151,11 @@ function createYardScene(canvas, width, height, dpr) {
     getStatus,
     getPaintedRoute() {
       return state.routeLine && state.routeLine.length >= 2 ? state.routeLine : null
+    },
+    getSelfWorld() {
+      if (!state.self) return null
+      const pos = selfOnRoadPos() || toWorld(state.self.longitude, state.self.latitude, 0)
+      return pos ? { x: pos.x, y: pos.y, z: pos.z } : null
     },
     renderFrame,
     dispose,

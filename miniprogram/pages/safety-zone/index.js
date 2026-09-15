@@ -30,8 +30,9 @@ function normalizeAngleDelta(delta) {
 function pickSafetyInstruction(page, fallback) {
   const targetName = (page.session && page.session.targetName) || '安全操作区'
   const painted = page.scene && page.scene.getPaintedRoute && page.scene.getPaintedRoute()
+  const selfWorld = page.scene && page.scene.getSelfWorld && page.scene.getSelfWorld()
   const fromPainted = painted
-    ? routeInstruction.describeWorldInstruction(painted, targetName)
+    ? routeInstruction.describeWorldInstruction(selfWorld, painted, targetName)
     : ''
   if (fromPainted) return fromPainted
   const blocks = page.yardMapData && page.yardMapData.blocks

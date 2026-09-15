@@ -98,14 +98,15 @@ function stripBacktrack(points, turnFn) {
   return out
 }
 
-function formatManeuver(acc, maneuver) {
-  if (acc <= 8) return `即将${maneuver}`
-  return `前方路口${maneuver} · ${Math.max(1, Math.round(acc))}m`
+function formatDriveToTurn(straightM, maneuver) {
+  const m = Math.max(1, Math.round(straightM))
+  if (m <= 8) return `即将${maneuver}`
+  return `直行${m}米后${maneuver}`
 }
 
 function formatStraight(remain, targetName) {
   if (remain <= 28) return `即将到达${displayAreaName(targetName || '目的地')}`
-  return '沿当前道路直行'
+  return `沿当前道路直行 · ${Math.max(1, Math.round(remain))}米`
 }
 
 function headingEastNorth(east, north) {
@@ -144,7 +145,7 @@ function firstRequiredTurn(points, headingFn, distFn) {
     if (i >= points.length - 1) break
     const heading = headingFn(points[i], points[i + 1])
     const delta = normalizeDelta(heading - startHeading)
-    if (Math.abs(delta) >= 35 && accDist > 2) {
+    if (Math.abs(delta) >= 25 && accDist > 2) {
       return {
         distance: accDist,
         maneuver: delta > 0 ? '右转' : '左转'
@@ -247,24 +248,76 @@ function describeNextInstruction(self, points, targetName, blocks) {
     }
   )
   if (!turn) return formatStraight(hit.remain, targetName)
-  return formatManeuver(turn.distance, turn.maneuver)
+  return formatDriveToTurn(turn.distance, turn.maneuver)
 }
 
-/** 用已经画在路上的蓝线算下一句，和画面箭头完全一致。 */
-function describeWorldInstruction(worldPoints, targetName) {
-  if (!worldPoints || worldPoints.length < 2) return ''
-  let remain = 0
-  for (let i = 1; i < worldPoints.length; i += 1) {
-    remain += worldPoints[i].distanceTo(worldPoints[i - 1])
+function projectWorldRoute(selfWorld, points) {
+  if (!selfWorld || !points || points.length < 2) {
+    return { points: points || [], remain: 0 }
   }
-  if (remain <= 28) return formatStraight(remain, targetName)
-  const turn = firstRequiredTurn(
-    worldPoints,
-    headingWorld,
-    (a, b) => a.distanceTo(b)
-  )
-  if (!turn) return formatStraight(remain, targetName)
-  return formatManeuver(turn.distance, turn.maneuver)
+  let bestI = 0
+  let bestT = 0
+  let bestD = Infinity
+  const segLen = []
+  for (let i = 0; i < points.length - 1; i += 1) {
+    const a = points[i]
+    const b = points[i + 1]
+    const dx = b.x - a.x
+    const dz = b.z - a.z
+    const len2 = dx * dx + dz * dz
+    const len = Math.sqrt(len2)
+    segLen[i] = len
+    const t = len2 < 1e-6 ? 0 : Math.max(0, Math.min(1, ((selfWorld.x - a.x) * dx + (selfWorld.z - a.z) * dz) / len2))
+    const px = a.x + t * dx
+    const pz = a.z + t * dz
+    const d = Math.hypot(selfWorld.x - px, selfWorld.z - pz)
+    if (d < bestD) {
+      bestD = d
+      bestI = i
+      bestT = t
+    }
+  }
+  const a = points[bestI]
+  const b = points[bestI + 1]
+  const clipped = [{
+    x: a.x + (b.x - a.x) * bestT,
+    y: a.y,
+    z: a.z + (b.z - a.z) * bestT
+  }]
+  for (let i = bestI + 1; i < points.length; i += 1) clipped.push(points[i])
+  let remain = 0
+  for (let i = 1; i < clipped.length; i += 1) {
+    remain += clipped[i].distanceTo(clipped[i - 1])
+  }
+  return { points: clipped, remain }
+}
+
+/** 沿蓝线找第一个真实拐弯（叉积判定，与路线箭头同几何）。 */
+function firstTurnOnWorld(points) {
+  if (!points || points.length < 3) return null
+  let acc = 0
+  for (let i = 1; i < points.length - 1; i += 1) {
+    acc += points[i].distanceTo(points[i - 1])
+    const turn = turnAtWorld(points[i - 1], points[i], points[i + 1])
+    if (isFakeSnapTurn(turn.degrees) || Math.abs(turn.degrees) < 25 || acc <= 2) continue
+    return { distance: acc, maneuver: turn.maneuver }
+  }
+  return null
+}
+
+/**
+ * 用已画蓝线 + 当前车位算下一句（从投影点往前找第一个弯，避免「全文相对起点」报反左右转）。
+ */
+function describeWorldInstruction(selfWorld, worldPoints, targetName) {
+  if (!worldPoints || worldPoints.length < 2) return ''
+  const hit = selfWorld
+    ? projectWorldRoute(selfWorld, worldPoints)
+    : { points: worldPoints, remain: remainingAlongWorld(worldPoints) }
+  if (!hit.points || hit.points.length < 2) return ''
+  if (hit.remain <= 28) return formatStraight(hit.remain, targetName)
+  const turn = firstTurnOnWorld(hit.points)
+  if (!turn) return formatStraight(hit.remain, targetName)
+  return formatDriveToTurn(turn.distance, turn.maneuver)
 }
 
 function remainingAlongWorld(worldPoints) {

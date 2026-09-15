@@ -6,7 +6,7 @@ function displayAreaText(text) {
   return String(text || '').replace(/座场区/g, '区').replace(/座/g, '区')
 }
 
-const WORK_TYPES = [
+const DEFAULT_WORK_TYPES = [
   { value: 'pickup_empty', label: '提空', needCntr: true },
   { value: 'pickup_full', label: '提重', needCntr: true },
   { value: 'return_empty', label: '还空', needCntr: false },
@@ -22,7 +22,7 @@ Page({
     yardName: '',
     equipmentOptions: [],
     equipmentIndex: 0,
-    workTypeOptions: WORK_TYPES,
+    workTypeOptions: DEFAULT_WORK_TYPES,
     workTypeIndex: 0,
     workTypeLabel: '提空',
     needCntrNo: true,
@@ -30,7 +30,8 @@ Page({
     carrierIndex: 0,
     cntrNo: '',
     cntrSize: '',
-    cntrHint: ''
+    cntrHint: '',
+    taskOptionsLoaded: false
   },
 
   onLoad() {
@@ -50,21 +51,31 @@ Page({
       ...selection,
       target,
       yardName: user.currentCyName || user.yardName || '',
-      workTypeLabel: WORK_TYPES[0].label,
-      needCntrNo: WORK_TYPES[0].needCntr
+      workTypeLabel: DEFAULT_WORK_TYPES[0].label,
+      needCntrNo: DEFAULT_WORK_TYPES[0].needCntr
     })
     this.loadTaskOptions()
   },
 
   async loadTaskOptions() {
     try {
-      const [equipment, carriers] = await Promise.all([
+      const [equipment, carriers, workTypes] = await Promise.all([
         request({ url: '/navigation/mobile/equipment' }),
-        request({ url: '/navigation/mobile/carriers' })
+        request({ url: '/navigation/mobile/carriers' }),
+        request({ url: '/navigation/mobile/work-types' })
       ])
       const equipmentOptions = (equipment || []).map(item => item.label || item.value).filter(Boolean)
       const carrierOptions = (carriers || []).map(item => item.value || item.label).filter(Boolean)
-      const patch = {}
+      const workTypeOptions = (workTypes && workTypes.length ? workTypes : DEFAULT_WORK_TYPES).map(item => ({
+        value: item.value,
+        label: item.label,
+        needCntr: item.needCntr !== false && item.needCntr !== 'false' && (
+          item.needCntr === true || item.needCntr === 'true' || String(item.value || '').startsWith('pickup_')
+        )
+      }))
+      const patch = { workTypeOptions, workTypeIndex: 0 }
+      patch.workTypeLabel = workTypeOptions[0].label
+      patch.needCntrNo = workTypeOptions[0].needCntr
       if (equipmentOptions.length) {
         patch.equipmentOptions = equipmentOptions
         patch.equipmentIndex = 0
@@ -73,9 +84,11 @@ Page({
         patch.carrierOptions = carrierOptions
         patch.carrierIndex = 0
       }
-      if (Object.keys(patch).length) this.setData(patch)
+      patch.taskOptionsLoaded = true
+      this.setData(patch)
     } catch (error) {
-      wx.showToast({ title: error.message || '作业机械加载失败', icon: 'none' })
+      this.setData({ taskOptionsLoaded: true })
+      wx.showToast({ title: error.message || '作业选项加载失败', icon: 'none' })
     }
   },
 
@@ -85,7 +98,7 @@ Page({
 
   onWorkTypeChange(event) {
     const workTypeIndex = Number(event.detail.value)
-    const work = WORK_TYPES[workTypeIndex]
+    const work = this.data.workTypeOptions[workTypeIndex]
     this.setData({
       workTypeIndex,
       workTypeLabel: work.label,
@@ -167,7 +180,7 @@ Page({
           targetId: this.data.target.id,
           sourceType: this.data.sourceType,
           purpose: 'job',
-          workType: WORK_TYPES[this.data.workTypeIndex].value,
+          workType: this.data.workTypeOptions[this.data.workTypeIndex].value,
           workTypeLabel: this.data.workTypeLabel,
           equipmentName: this.data.equipmentOptions[this.data.equipmentIndex],
           carrierCode: this.data.carrierOptions[this.data.carrierIndex],

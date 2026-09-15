@@ -19,7 +19,8 @@
       <picker wx:if="{{equipmentOptions.length}}" range="{{equipmentOptions}}" value="{{equipmentIndex}}" bindchange="onEquipmentChange">
         <view class="field-value">{{equipmentOptions[equipmentIndex]}} ›</view>
       </picker>
-      <view wx:else class="field-value muted">正在读取堆场机械…</view>
+      <view wx:elif="{{!taskOptionsLoaded}}" class="field-value muted">正在读取堆场机械…</view>
+      <view wx:else class="field-value muted">暂无作业机械，请在管理端维护协同角色</view>
     </view>
     <view class="field">
       <view class="field-label">作业类型</view>
@@ -32,7 +33,8 @@
       <picker wx:if="{{carrierOptions.length}}" range="{{carrierOptions}}" value="{{carrierIndex}}" bindchange="onCarrierChange">
         <view class="field-value">{{carrierOptions[carrierIndex]}} ›</view>
       </picker>
-      <view wx:else class="field-value muted">正在读取在场船公司…</view>
+      <view wx:elif="{{!taskOptionsLoaded}}" class="field-value muted">正在读取在场船公司…</view>
+      <view wx:else class="field-value muted">暂无在场船公司，请同步在场箱数据</view>
     </view>
 
     <view class="field" wx:if="{{needCntrNo}}">

@@ -20,8 +20,9 @@ function remainingAlongRoute(self, points, blocks) {
 
 function pickLocalInstruction(page, targetName, fallback) {
   const painted = page.scene && page.scene.getPaintedRoute && page.scene.getPaintedRoute()
+  const selfWorld = page.scene && page.scene.getSelfWorld && page.scene.getSelfWorld()
   const fromPainted = painted
-    ? routeInstruction.describeWorldInstruction(painted, targetName)
+    ? routeInstruction.describeWorldInstruction(selfWorld, painted, targetName)
     : ''
   if (fromPainted) return displayAreaText(fromPainted)
   const blocks = page.yardMapData && page.yardMapData.blocks
@@ -78,6 +79,8 @@ function compassRotateOf(status) {
 
 function instructionArrow(text) {
   if (!text) return '↑'
+  if (/直行[\d.]+米后右转|前方.*右转/.test(text)) return '↱'
+  if (/直行[\d.]+米后左转|前方.*左转/.test(text)) return '↰'
   if (text.includes('右转')) return '↱'
   if (text.includes('左转')) return '↰'
   if (text.includes('掉头')) return '↷'
