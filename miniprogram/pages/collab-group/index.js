@@ -300,7 +300,8 @@ Page({
 
   appendMessage(raw) {
     if (!raw || !raw.id) return
-    if ((this.data.messages || []).some(item => item.id === raw.id)) return
+    const rawId = String(raw.id)
+    if ((this.data.messages || []).some(item => String(item.id) === rawId)) return
     const message = decorate(raw)
     this.lastMessageId = message.id
     if (raw.seq != null) this.lastMessageSeq = raw.seq

@@ -31,7 +31,8 @@ Page({
     cntrNo: '',
     cntrSize: '',
     cntrHint: '',
-    taskOptionsLoaded: false
+    taskOptionsLoaded: false,
+    forkliftInfo: null
   },
 
   onLoad() {
@@ -55,27 +56,31 @@ Page({
       needCntrNo: DEFAULT_WORK_TYPES[0].needCntr
     })
     this.loadTaskOptions()
+    this.loadForkliftInfo(target && target.blockId)
+  },
+
+  async loadForkliftInfo(blockId) {
+    if (!blockId) {
+      this.setData({ forkliftInfo: null })
+      return
+    }
+    try {
+      const forklifts = await request({ url: `/basics/forklift/by-block/${encodeURIComponent(blockId)}` })
+      this.setData({ forkliftInfo: (forklifts && forklifts.length) ? forklifts[0] : null })
+    } catch (error) {
+      this.setData({ forkliftInfo: null })
+    }
   },
 
   async loadTaskOptions() {
     try {
-      const [equipment, carriers, workTypes] = await Promise.all([
+      const [equipment, carriers] = await Promise.all([
         request({ url: '/navigation/mobile/equipment' }),
-        request({ url: '/navigation/mobile/carriers' }),
-        request({ url: '/navigation/mobile/work-types' })
+        request({ url: '/navigation/mobile/carriers' })
       ])
       const equipmentOptions = (equipment || []).map(item => item.label || item.value).filter(Boolean)
       const carrierOptions = (carriers || []).map(item => item.value || item.label).filter(Boolean)
-      const workTypeOptions = (workTypes && workTypes.length ? workTypes : DEFAULT_WORK_TYPES).map(item => ({
-        value: item.value,
-        label: item.label,
-        needCntr: item.needCntr !== false && item.needCntr !== 'false' && (
-          item.needCntr === true || item.needCntr === 'true' || String(item.value || '').startsWith('pickup_')
-        )
-      }))
-      const patch = { workTypeOptions, workTypeIndex: 0 }
-      patch.workTypeLabel = workTypeOptions[0].label
-      patch.needCntrNo = workTypeOptions[0].needCntr
+      const patch = {}
       if (equipmentOptions.length) {
         patch.equipmentOptions = equipmentOptions
         patch.equipmentIndex = 0
@@ -148,6 +153,9 @@ Page({
         patch.carrierIndex = options.indexOf(code)
       }
       this.setData(patch)
+      if (target && target.blockId) {
+        this.loadForkliftInfo(target.blockId)
+      }
       wx.showToast({ title: '已反显贝位', icon: 'success' })
     } catch (error) {
       this.setData({ cntrHint: '' })

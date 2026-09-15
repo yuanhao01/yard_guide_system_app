@@ -46,6 +46,11 @@
       <view class="cntr-hint" wx:if="{{cntrHint}}">{{cntrHint}}</view>
     </view>
 
+    <view class="field" wx:if="{{forkliftInfo}}">
+      <view class="field-label">负责叉车</view>
+      <view class="field-value">{{forkliftInfo.forkliftName || forkliftInfo.forkliftCode}}{{forkliftInfo.licensePlate ? '（' + forkliftInfo.licensePlate + '）' : ''}}</view>
+    </view>
+
     <view class="meta-row">
       <view><text>场区</text>{{target.blockName || '--'}}</view>
       <view><text>贝位</text>{{target.slot || '--'}}</view>
