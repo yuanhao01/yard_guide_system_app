@@ -144,6 +144,7 @@ function createYardScene(canvas, width, height, dpr) {
     // 场区包围盒，建图时算出，道口等按场区边缘定位的物体要用
     bounds: null,
     route: [],
+    routeLaneOffset: false,
     target: null,
     targetLabel: '',
     targetBlockId: null,
@@ -616,7 +617,6 @@ function createYardScene(canvas, width, height, dpr) {
     }
   }
 
-  /** 路线偏到行驶方向右侧车道，避开路心黄虚线。 */
   function unitXZ(from, to) {
     const v = new THREE.Vector3(to.x - from.x, 0, to.z - from.z)
     if (v.length() < 1e-4) return null
@@ -726,9 +726,51 @@ function createYardScene(canvas, width, height, dpr) {
     return best
   }
 
-  function isOneWayNear(worldPoint) {
-    const hit = nearestRoadHit(worldPoint, 7, false)
-    return !!(hit && hit.oneWay)
+  function isOneWayRoad(road) {
+    const dir = Number(road && road.directionType)
+    return dir === 1 || dir === 2
+  }
+
+  function laneOffsetOfRoad(road) {
+    if (!road || isOneWayRoad(road)) return 0
+    const width = Number(road.widthM)
+    return width >= 2 ? width * 0.25 : 2.7
+  }
+
+  function roadAlongTravel(worldPoint, tan) {
+    const roads = (state.map && state.map.roads) || []
+    let best = null
+    let bestScore = Infinity
+    const ux = tan && tan.x != null ? tan.x : 0
+    const uz = tan && tan.z != null ? tan.z : 0
+    roads.forEach(road => {
+      const hit = projectToRoadPath(worldPoint, road.path || [])
+      if (!hit || hit.dist > 22) return
+      const t = hit.tangent
+      const align = t ? Math.abs(t.x * ux + t.z * uz) : 0
+      const score = hit.dist + (1 - align) * 10
+      if (score < bestScore) {
+        bestScore = score
+        best = Object.assign({ road, oneWay: isOneWayRoad(road) }, hit)
+      }
+    })
+    return best
+  }
+
+  function laneOffsetAlong(mid, tan) {
+    const hit = roadAlongTravel(mid, tan) || nearestRoadHit(mid, 12, false)
+    return hit ? laneOffsetOfRoad(hit.road) : 0
+  }
+
+  function offsetJunction(center, fromPt, toPt, fromRoad, toRoad) {
+    if (!center) return center
+    const inTan = unitXZ(fromPt, center) || unitXZ(fromPt, toPt)
+    const outTan = unitXZ(center, toPt) || inTan
+    if (!inTan || !outTan) return center
+    const inOff = laneOffsetOfRoad(fromRoad)
+    const outOff = laneOffsetOfRoad(toRoad)
+    if (!inOff && !outOff) return center
+    return miterLanePoint(center, inTan, inOff, outTan, outOff)
   }
 
   /** 把 (u, v) 归一化坐标换算成世界坐标，u 沿贝方向、v 沿排方向。 */
@@ -1067,32 +1109,152 @@ function createYardScene(canvas, width, height, dpr) {
     return false
   }
 
-  /** 丢掉不沿道路的第一段（定位点斜接到旧折线、穿空地的飞线）。 */
   function dropOffRoadChords(points) {
     if (!points || points.length < 2) return points || []
     let start = 0
-    while (start < points.length - 1 && chordOffRoad(points[start], points[start + 1])) {
+    while (start < points.length - 1 && !pointOnRoad(points[start]) && chordOffRoad(points[start], points[start + 1])) {
       start += 1
     }
     let end = points.length
-    while (end > start + 1 && chordOffRoad(points[end - 2], points[end - 1])) {
+    while (end > start + 1 && !pointOnRoad(points[end - 1]) && chordOffRoad(points[end - 2], points[end - 1])) {
       end -= 1
     }
     const trimmed = points.slice(start, end)
     if (trimmed.length < 2) return points
-    const filtered = [trimmed[0].clone ? trimmed[0].clone() : trimmed[0]]
+    const filtered = [cloneVec(trimmed[0])]
     for (let i = 1; i < trimmed.length; i += 1) {
       const prev = filtered[filtered.length - 1]
       const cur = trimmed[i]
-      if (chordOffRoad(prev, cur)) {
-        if (i === trimmed.length - 1) break
+      if (!chordOffRoad(prev, cur)) {
+        if (prev.distanceTo(cur) > 0.6) filtered.push(cloneVec(cur))
         continue
       }
-      if (prev.distanceTo(cur) > 0.6) {
-        filtered.push(cur.clone ? cur.clone() : cur)
+      const via = viaAlongRoads(prev, cur)
+      if (via && via.length) {
+        for (let v = 0; v < via.length; v += 1) {
+          if (filtered[filtered.length - 1].distanceTo(via[v]) > 0.8) {
+            filtered.push(cloneVec(via[v]))
+          }
+        }
+        if (filtered[filtered.length - 1].distanceTo(cur) > 0.8) filtered.push(cloneVec(cur))
+        continue
+      }
+      if (pointOnRoad(prev) && pointOnRoad(cur)) {
+        if (prev.distanceTo(cur) > 0.6) filtered.push(cloneVec(cur))
       }
     }
     return filtered.length >= 2 ? filtered : trimmed
+  }
+
+  function cloneVec(p) {
+    return p.clone ? p.clone() : new THREE.Vector3(p.x, p.y, p.z)
+  }
+
+  function pointOnRoad(p) {
+    const snap = nearestRoadSnap(p)
+    return Boolean(snap && snap.dist <= 8)
+  }
+
+  function sameNamedRoad(a, b) {
+    if (!a || !b) return false
+    if (a === b) return true
+    if (a.edgeCode && b.edgeCode && a.edgeCode === b.edgeCode) return true
+    if ((a.edgeName || a.roadName) && (a.edgeName || a.roadName) === (b.edgeName || b.roadName)) return true
+    return false
+  }
+
+  function roadPieces(road) {
+    const roads = (state.map && state.map.roads) || []
+    const pieces = roads.filter(item => sameNamedRoad(item, road))
+    return pieces.length ? pieces : (road ? [road] : [])
+  }
+
+  function projectToSegXZ(p, a, b) {
+    const dx = b.x - a.x
+    const dz = b.z - a.z
+    const len2 = dx * dx + dz * dz
+    const t = len2 < 1e-8 ? 0 : Math.max(0, Math.min(1, ((p.x - a.x) * dx + (p.z - a.z) * dz) / len2))
+    const on = new THREE.Vector3(a.x + t * dx, 0, a.z + t * dz)
+    return { on, dist: Math.hypot(p.x - on.x, p.z - on.z), t }
+  }
+
+  function segmentIntersectXZ(a0, a1, b0, b1) {
+    const ax = a1.x - a0.x
+    const az = a1.z - a0.z
+    const bx = b1.x - b0.x
+    const bz = b1.z - b0.z
+    const den = ax * bz - az * bx
+    if (Math.abs(den) < 1e-8) {
+      const hits = [projectToSegXZ(a0, b0, b1), projectToSegXZ(a1, b0, b1),
+        projectToSegXZ(b0, a0, a1), projectToSegXZ(b1, a0, a1)]
+      const near = hits.filter(h => h.dist <= 2.2).sort((l, r) => l.dist - r.dist)[0]
+      return near ? near.on : null
+    }
+    const dx = b0.x - a0.x
+    const dz = b0.z - a0.z
+    const t = (dx * bz - dz * bx) / den
+    const u = (dx * az - dz * ax) / den
+    if (t < -0.02 || t > 1.02 || u < -0.02 || u > 1.02) return null
+    const tt = Math.max(0, Math.min(1, t))
+    return new THREE.Vector3(a0.x + tt * ax, 0, a0.z + tt * az)
+  }
+
+  function roadIntersection(roadA, roadB) {
+    if (!roadA || !roadB || sameNamedRoad(roadA, roadB)) return null
+    const left = roadPieces(roadA)
+    const right = roadPieces(roadB)
+    let best = null
+    let bestDist = Infinity
+    for (let i = 0; i < left.length; i += 1) {
+      const pa = left[i].path || []
+      for (let ia = 0; ia < pa.length - 1; ia += 1) {
+        const a0 = toWorld(pa[ia], 0)
+        const a1 = toWorld(pa[ia + 1], 0)
+        for (let j = 0; j < right.length; j += 1) {
+          const pb = right[j].path || []
+          for (let ib = 0; ib < pb.length - 1; ib += 1) {
+            const hit = segmentIntersectXZ(a0, a1, toWorld(pb[ib], 0), toWorld(pb[ib + 1], 0))
+            if (!hit) continue
+            const d = nearestRoadSnap(hit)
+            if (d && d.dist < bestDist) {
+              bestDist = d.dist
+              best = hit
+            }
+          }
+        }
+      }
+    }
+    return best
+  }
+
+  function viaAlongRoads(a, b) {
+    const aSnap = nearestRoadSnap(a)
+    const bSnap = nearestRoadSnap(b)
+    if (!aSnap || !bSnap || aSnap.dist > 10 || bSnap.dist > 10) return null
+    if (sameNamedRoad(aSnap.road, bSnap.road)) return []
+    const direct = roadIntersection(aSnap.road, bSnap.road)
+    if (direct) return [offsetJunction(direct, a, b, aSnap.road, bSnap.road)]
+    const roads = (state.map && state.map.roads) || []
+    let best = null
+    let bestLen = Infinity
+    const seen = new Set()
+    for (let i = 0; i < roads.length; i += 1) {
+      const mid = roads[i]
+      const key = mid.edgeCode || mid.edgeName || mid.id || i
+      if (seen.has(key) || sameNamedRoad(mid, aSnap.road) || sameNamedRoad(mid, bSnap.road)) continue
+      seen.add(key)
+      const ia = roadIntersection(aSnap.road, mid)
+      const ib = roadIntersection(mid, bSnap.road)
+      if (!ia || !ib) continue
+      const len = a.distanceTo(ia) + ia.distanceTo(ib) + ib.distanceTo(b)
+      if (len < bestLen) {
+        bestLen = len
+        const ja = offsetJunction(ia, a, ib, aSnap.road, mid)
+        const jb = offsetJunction(ib, ia, b, mid, bSnap.road)
+        best = ja.distanceTo(jb) > 0.8 ? [ja, jb] : [ja]
+      }
+    }
+    return best
   }
 
   function chordOffRoad(a, b) {
@@ -1278,9 +1440,9 @@ function createYardScene(canvas, width, height, dpr) {
    * 剩余路段：只沿后端路网折线画，禁止集卡→折线投影点的直线（会斜穿箱区）。
    * 仅当车已在同一段路上且短线段贴马路时，才把集卡点接在折线前面。
    */
-  function clipWorldRouteToSelf(points) {
+  function clipWorldRouteToSelf(points, skipChordRepair) {
     if (!points || points.length < 2 || !state.self) return points
-    const truck = selfOnRoadPos() || selfWorld()
+    const truck = selfWorld() || selfOnRoadPos()
     const chosen = pickRouteProgress(points, truck)
     if (!chosen) return points
     const segA = points[chosen.index]
@@ -1302,21 +1464,32 @@ function createYardScene(canvas, width, height, dpr) {
         gapToOnM: Math.round(gap * 10) / 10,
         onSameRoad,
         canStitchTruck,
+        laneOffsetApplied: state.routeLaneOffset === true,
         polyFirst: points[0] ? [points[0].x, points[0].z] : null
       }))
     } catch (logErr) {
-      // ignore
     }
     const out = []
     if (canStitchTruck) {
       out.push(truck.clone())
       if (gap > 0.8) out.push(chosen.on.clone())
     } else {
-      out.push(chosen.on.clone())
+      const join = points[0] || chosen.on
+      const via = truck && join ? viaAlongRoads(truck, join) : null
+      if (via && truckSnap && truckSnap.dist <= 10 && join && truck.distanceTo(join) > 20) {
+        out.push(truck.clone())
+        for (let v = 0; v < via.length; v += 1) {
+          if (out[out.length - 1].distanceTo(via[v]) > 0.8) out.push(cloneVec(via[v]))
+        }
+        if (out[out.length - 1].distanceTo(join) > 0.8) out.push(join.clone())
+      } else {
+        out.push(chosen.on.clone())
+      }
     }
     for (let i = chosen.index + 1; i < points.length; i += 1) {
       if (out[out.length - 1].distanceTo(points[i]) > 0.8) out.push(points[i].clone())
     }
+    if (skipChordRepair) return out.length >= 2 ? out : points
     return dropOffRoadChords(out.length >= 2 ? out : points)
   }
 
@@ -1336,20 +1509,20 @@ function createYardScene(canvas, width, height, dpr) {
         if (dedup[dedup.length - 1].distanceTo(raw[i]) > 0.8) dedup.push(raw[i])
       }
       if (dedup.length < 2) return
-      const onRoad = dropOffRoadChords(keepOnRoads(dropLeadStub(simplifyRoutePoints(trimDestinationStub(dedup)))))
-      const clipped = clipWorldRouteToSelf(onRoad.length >= 2 ? onRoad : dedup)
+      const alreadyLane = state.routeLaneOffset === true
+      const cleaned = keepOnRoads(dropLeadStub(simplifyRoutePoints(trimDestinationStub(dedup))))
+      const onRoad = alreadyLane ? cleaned : dropOffRoadChords(cleaned)
+      const clipped = clipWorldRouteToSelf(onRoad.length >= 2 ? onRoad : dedup, alreadyLane)
       if (!clipped || clipped.length < 2) {
         state.dirty = true
         return
       }
-      const offset = offsetPolylineRight(clipped, (idx, mid) => (
-        isOneWayNear(mid) ? 0 : 2.7
-      ))
-      const cornerSafe = dropOffRoadChords(offset)
-      const smoothed = filletPolyline(cornerSafe.length >= 2 ? cornerSafe : offset, 2.2)
-      let painted = dropOffRoadChords(smoothed)
-      if (painted.length < 2) painted = dropOffRoadChords(cornerSafe.length >= 2 ? cornerSafe : offset)
-      const linePts = painted.length >= 2 ? painted : smoothed
+      const offset = alreadyLane ? clipped : offsetPolylineRight(clipped, (idx, mid) => {
+        const tan = unitXZ(clipped[idx], clipped[idx + 1])
+        return laneOffsetAlong(mid, tan)
+      })
+      const smoothed = filletPolyline(offset, 2.2)
+      const linePts = smoothed.length >= 2 ? smoothed : offset
       const blueW = 0.95
       const routeY = 0.52
       buildRouteRibbon(linePts, blueW, routeY, 0x1d6fe8, routeGroup)
@@ -1555,8 +1728,9 @@ function createYardScene(canvas, width, height, dpr) {
   /** 堆高机朝向用进终点的最后一段路，不跟本车车头转。 */
   function lastRouteApproach() {
     const raw = routeWorldPoints()
+    const cleaned = raw.length >= 2 ? keepOnRoads(dropLeadStub(raw)) : []
     const line = raw.length >= 2
-      ? dropOffRoadChords(keepOnRoads(dropLeadStub(raw)))
+      ? (state.routeLaneOffset ? cleaned : dropOffRoadChords(cleaned))
       : (state.routeLine || [])
     if (!line || line.length < 2) return new THREE.Vector3(1, 0, 0)
     const a = line[line.length - 2]
@@ -1896,8 +2070,9 @@ function createYardScene(canvas, width, height, dpr) {
     rebuildDynamic()
   }
 
-  function setRoute(route) {
+  function setRoute(route, options) {
     state.route = route || []
+    state.routeLaneOffset = Boolean(options && options.laneOffsetApplied)
     rebuildRoute()
   }
 

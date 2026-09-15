@@ -230,9 +230,13 @@ function describeNextInstruction(self, points, targetName, blocks) {
   if (!self || !points || points.length < 2) return ''
   const hit = prepareYardRoute(self, points, blocks)
   if (!hit.points || hit.points.length < 2) return ''
-  if (hit.remain <= 28) return formatStraight(hit.remain, targetName)
+  const gap = points[0] && self.x != null
+    ? Math.hypot(self.x - points[0].x, self.y - points[0].y)
+    : 0
+  if (hit.remain <= 28 && gap <= 20) return formatStraight(hit.remain, targetName)
+  if (hit.remain <= 28 && gap > 20) return formatStraight(Math.max(gap + hit.remain, 1), targetName)
   const turn = firstRequiredTurn(hit.points, headingYard, yardDistance)
-  if (!turn) return formatStraight(hit.remain, targetName)
+  if (!turn) return formatStraight(Math.max(hit.remain, gap), targetName)
   return formatDriveToTurn(turn.distance, turn.maneuver)
 }
 
@@ -299,9 +303,15 @@ function describeWorldInstruction(selfWorld, worldPoints, targetName) {
     ? projectWorldRoute(selfWorld, worldPoints)
     : { points: worldPoints, remain: remainingAlongWorld(worldPoints) }
   if (!hit.points || hit.points.length < 2) return ''
-  if (hit.remain <= 28) return formatStraight(hit.remain, targetName)
+  const gap = selfWorld && worldPoints[0]
+    ? Math.hypot(selfWorld.x - worldPoints[0].x, selfWorld.z - worldPoints[0].z)
+    : 0
+  if (hit.remain <= 28 && gap <= 20) return formatStraight(hit.remain, targetName)
+  if (hit.remain <= 28 && gap > 20) {
+    return formatStraight(Math.max(gap + hit.remain, 1), targetName)
+  }
   const turn = firstTurnOnWorld(hit.points)
-  if (!turn) return formatStraight(hit.remain, targetName)
+  if (!turn) return formatStraight(Math.max(hit.remain, gap), targetName)
   return formatDriveToTurn(turn.distance, turn.maneuver)
 }
 

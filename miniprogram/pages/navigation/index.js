@@ -1,4 +1,4 @@
-﻿const config = require('../../config')
+const config = require('../../config')
 const request = require('../../utils/request')
 const auth = require('../../utils/auth')
 const locationUtil = require('../../utils/location')
@@ -38,6 +38,16 @@ function pickRemainingMeters(page, session, route) {
   const painted = page.scene && page.scene.getPaintedRoute && page.scene.getPaintedRoute()
   const paintedRemain = routeInstruction.remainingAlongWorld(painted)
   const fromSession = Number(session && session.remainingDistanceMeters)
+  const p0 = page.routePoints && page.routePoints[0]
+  const gapToRoute = page.self && p0 && page.self.x != null && p0.x != null
+    ? Math.hypot(page.self.x - p0.x, page.self.y - p0.y)
+    : 0
+  const toTarget = page.self && page.targetPoint
+    ? Math.hypot(page.self.x - page.targetPoint.x, page.self.y - page.targetPoint.y)
+    : 0
+  if (gapToRoute > 25 && toTarget > 25) {
+    return Math.max(along, toTarget, 1)
+  }
   // 路外飞线会把 along/planned 撑到数千米，优先用裁掉飞线后的画线长度
   if (paintedRemain > 8 && (along > paintedRemain * 2.5 || planned > paintedRemain * 2.5)) {
     return paintedRemain
@@ -169,6 +179,7 @@ Page({
     this.lastReportTime = 0
     this.yardMapData = null
     this.routePoints = []
+    this.routeLaneOffset = false
     this.targetPoint = null
     // self 是场区米制坐标（后端 selfPoint），gps 是原始定位，只用于上报
     this.self = null
@@ -254,7 +265,9 @@ Page({
       this.data.session.targetBlockId,
       this.data.session.targetSlot
     )
-    if (opts.route !== false) this.scene.setRoute(this.routePoints)
+    if (opts.route !== false) {
+      this.scene.setRoute(this.routePoints, { laneOffsetApplied: this.routeLaneOffset })
+    }
     if (this.scene.setPurpose) {
       this.scene.setPurpose(this.data.session.purpose || 'job')
     }
@@ -342,6 +355,7 @@ Page({
     const points = route && route.polyline ? route.polyline : this.routePoints
     const target = (route && route.target) || this.targetPoint || points[points.length - 1]
     this.routePoints = points || []
+    if (route) this.routeLaneOffset = Boolean(route.laneOffsetApplied)
     this.targetPoint = target && target.x != null && target.y != null
       ? { x: Number(target.x), y: Number(target.y) }
       : null
@@ -360,6 +374,7 @@ Page({
       p1: p1 ? [p1.x, p1.y] : null,
       target: this.targetPoint ? [this.targetPoint.x, this.targetPoint.y] : null,
       distM: route && route.distanceMeters,
+      laneOffsetApplied: Boolean(this.routeLaneOffset),
       selfRoad: snapSelf && snapSelf.road ? snapSelf.road : null,
       selfSnapM: snapSelf && snapSelf.distM != null ? Math.round(snapSelf.distM * 10) / 10 : null
     }))
@@ -696,10 +711,9 @@ Page({
   },
 
   /**
-   * @param {{x:number, y:number}} point 后端已吸附到车道的场区米制坐标
+   * @param {{x:number, y:number}} point 后端已吸附到行驶方向右车道的场区米制坐标
    *
-   * 这里不再本地贴路：后端吸附时已按单/双向和车头朝向挪到了车道中心，
-   * 再吸一次会把双向路的靠右偏移拉回路中间。
+   * 这里不再本地贴路：后端按路线前进方向靠右，再吸一次会把偏移拉回路中间。
    */
   applySelfPoint(point) {
     if (!point || point.x == null || point.y == null) return

@@ -58,7 +58,7 @@ Page({
         yards: [],
         yardNames: [],
         yardsLoadError: msg.includes('fail') || msg.includes('timeout')
-          ? `${msg}：请确认手机能访问 config.js 里的 apiBaseUrl（含 :19207 端口）`
+          ? `${msg}：请确认手机能访问 config.js 里的 apiBaseUrl`
           : msg
       })
       wx.showToast({ title: msg, icon: 'none', duration: 2800 })
