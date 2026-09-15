@@ -165,6 +165,9 @@ function createYardScene(canvas, width, height, dpr) {
     demoContainerAnchor: null,
     routeEnd: null,
     routeLine: null,
+    /** 出场道口固定锚点（导航配置 entry），与当前任务终点无关 */
+    gateAnchorLng: null,
+    gateAnchorLat: null,
     purpose: 'job',
     // 北朝上。车头跟手机转，和右上角高德小人一致；拧地图才改 bearing
     headingUp: false,
@@ -1275,7 +1278,6 @@ function createYardScene(canvas, width, height, dpr) {
       buildRouteRibbon(linePts, blueW, routeY, 0x1d6fe8, routeGroup)
       state.routeEnd = linePts[linePts.length - 1]
       state.routeLine = linePts
-      buildCrossing()
       const total = linePts.reduce((sum, p, idx) => (
         idx === 0 ? 0 : sum + linePts[idx - 1].distanceTo(p)
       ), 0)
@@ -1387,56 +1389,40 @@ function createYardScene(canvas, width, height, dpr) {
     return state.purpose === 'exit' || /出场|出口|EXIT/i.test(state.targetLabel || '')
   }
 
-  /** 路线末段行车方向（世界坐标 XZ）。 */
-  function routeEndTangent() {
-    const line = state.routeLine || []
-    if (line.length >= 2) {
-      const a = line[line.length - 2]
-      const b = line[line.length - 1]
-      const t = new THREE.Vector3(b.x - a.x, 0, b.z - a.z)
-      if (t.length() > 0.05) return t.normalize()
+  function pickExitNodeFromMap() {
+    const nodes = (state.map && state.map.nodes) || []
+    for (let i = 0; i < nodes.length; i += 1) {
+      const node = nodes[i]
+      const label = `${node.nodeName || ''}${node.nodeCode || ''}`
+      if (!/出场|出口|exit|gate/i.test(label)) continue
+      const lng = node.longitude != null ? Number(node.longitude) : NaN
+      const lat = node.latitude != null ? Number(node.latitude) : NaN
+      if (Number.isFinite(lng) && Number.isFinite(lat) && Math.abs(lng) > 1e-4 && Math.abs(lat) > 1e-4) {
+        return { lng, lat }
+      }
     }
-    const raw = routeWorldPoints()
-    if (raw.length >= 2) {
-      const a = raw[raw.length - 2]
-      const b = raw[raw.length - 1]
-      const t = new THREE.Vector3(b.x - a.x, 0, b.z - a.z)
-      if (t.length() > 0.05) return t.normalize()
-    }
-    return new THREE.Vector3(0, 0, 1)
+    return null
   }
 
-  /**
-   * 道口模型锚点：优先导航配置里的 entry；出场时相对路线终点再往前 18m，
-   * 避免「剩余 5m」时闸口模型与集卡重合。
-   */
+  /** 道口只认固定出场锚点，绝不使用当前路线终点/任务终点。 */
   function resolveCrossingAnchor() {
-    const exitMode = isExitPurpose()
-    const stop = destPoint()
-    const tangent = routeEndTangent()
-    const t = state.target || {}
-    const entryLng = t.entryLongitude != null ? Number(t.entryLongitude) : NaN
-    const entryLat = t.entryLatitude != null ? Number(t.entryLatitude) : NaN
-    if (Number.isFinite(entryLng) && Number.isFinite(entryLat)
-        && Math.abs(entryLng) > 1e-4 && Math.abs(entryLat) > 1e-4) {
-      const entry = toWorld(entryLng, entryLat, 0)
-      if (exitMode && stop) {
-        const along = new THREE.Vector3(entry.x - stop.x, 0, entry.z - stop.z)
-        if (along.length() > 0.5) {
-          return entry.clone().add(along.normalize().multiplyScalar(6))
-        }
-        return entry.clone().add(tangent.clone().multiplyScalar(18))
-      }
-      return entry
+    const lng = state.gateAnchorLng != null ? Number(state.gateAnchorLng) : NaN
+    const lat = state.gateAnchorLat != null ? Number(state.gateAnchorLat) : NaN
+    if (Number.isFinite(lng) && Number.isFinite(lat) && Math.abs(lng) > 1e-4 && Math.abs(lat) > 1e-4) {
+      return toWorld(lng, lat, 0)
     }
-    if (exitMode && stop) {
-      return stop.clone().add(tangent.clone().multiplyScalar(22))
-    }
-    if (stop) return stop.clone()
+    const fromMap = pickExitNodeFromMap()
+    if (fromMap) return toWorld(fromMap.lng, fromMap.lat, 0)
     if (state.bounds) {
       return toWorld(state.bounds.maxLng, state.bounds.minLat, 0)
     }
     return null
+  }
+
+  function crossingTangentAt(anchor) {
+    const hit = nearestRoadHit(anchor, 28, false)
+    if (hit && hit.tangent && hit.tangent.length() > 0.05) return hit.tangent
+    return new THREE.Vector3(0, 0, 1)
   }
 
   function updateCrossingVisibility() {
@@ -1467,7 +1453,7 @@ function createYardScene(canvas, width, height, dpr) {
     if (!anchor) return
     const model = vehicleLoader.instantiate(THREE, parts, materialOpts)
     levelCrossingPedestals(model)
-    const tangent = routeEndTangent()
+    const tangent = crossingTangentAt(anchor)
     model.position.set(anchor.x, 0, anchor.z)
     model.rotation.y = Math.atan2(tangent.x, tangent.z)
     alignModelFootToRoad(model, ROAD_SURFACE_Y)
@@ -1858,10 +1844,8 @@ function createYardScene(canvas, width, height, dpr) {
       state.targetSlot = targetSlot
       rebuildMap()
     }
-    if (!sameTarget) {
-      buildCrossing()
-      rebuildDynamic()
-    } else applySelfPose()
+    if (!sameTarget) rebuildDynamic()
+    else applySelfPose()
   }
 
   function setSelf(self) {
@@ -2127,17 +2111,31 @@ function createYardScene(canvas, width, height, dpr) {
     renderer.dispose()
   }
 
+  function setExitGateAnchor(lng, lat) {
+    const nextLng = lng != null ? Number(lng) : NaN
+    const nextLat = lat != null ? Number(lat) : NaN
+    if (!Number.isFinite(nextLng) || !Number.isFinite(nextLat)
+        || Math.abs(nextLng) < 1e-4 || Math.abs(nextLat) < 1e-4) {
+      return
+    }
+    const same = state.gateAnchorLng === nextLng && state.gateAnchorLat === nextLat
+    state.gateAnchorLng = nextLng
+    state.gateAnchorLat = nextLat
+    if (!same) buildCrossing()
+  }
+
   return {
     setMap,
     setRoute,
     setTarget,
+    setExitGateAnchor,
     setSelf,
     setHeading,
     setDemoContainer,
     setFollowMode,
     setPurpose(purpose) {
       state.purpose = purpose || 'job'
-      buildCrossing()
+      updateCrossingVisibility()
       rebuildDynamic()
     },
     enableFollow,

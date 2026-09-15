@@ -15,9 +15,10 @@
       <view class="field-label">车牌号</view>
       <input class="field-input" maxlength="20" placeholder="例如 鲁A12345" value="{{plateNumber}}" bindinput="onPlateInput" />
       <view class="field-label">堆场</view>
-      <picker mode="selector" range="{{yardNames}}" value="{{yardIndex}}" bindchange="onYardChange">
-        <view class="field-input picker-value {{yardName ? '' : 'placeholder'}}">{{yardName || '请选择堆场'}}</view>
+      <picker mode="selector" range="{{yardNames}}" value="{{yardIndex >= 0 ? yardIndex : 0}}" bindchange="onYardChange" disabled="{{!yardNames.length}}">
+        <view class="field-input picker-value {{yardName ? '' : 'placeholder'}}">{{yardName || (yardNames.length ? '请选择堆场' : '堆场列表为空')}}</view>
       </picker>
+      <view class="yards-error" wx:if="{{yardsLoadError}}">{{yardsLoadError}}</view>
       <button class="primary-button login-button" loading="{{submitting}}" disabled="{{submitting}}" bindtap="login">进入堆场</button>
       <view class="login-tip">不用预先建账号，输入本次作业车牌并选择堆场即可</view>
     </block>

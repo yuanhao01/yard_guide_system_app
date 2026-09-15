@@ -21,6 +21,7 @@ Page({
     yardNames: [],
     yardIndex: -1,
     yardName: '',
+    yardsLoadError: '',
     userAccount: '',
     password: '',
     submitting: false
@@ -43,10 +44,24 @@ Page({
       const list = yards || []
       this.setData({
         yards: list,
-        yardNames: list.map(item => item.cyName || String(item.id))
+        yardNames: list.map(item => item.cyName || String(item.id)),
+        yardsLoadError: ''
       })
+      if (!list.length) {
+        this.setData({
+          yardsLoadError: '接口已通但未返回堆场，请查库表 t_yard_info 是否有 status=0（启用）的记录'
+        })
+      }
     } catch (error) {
-      wx.showToast({ title: error.message || '堆场列表加载失败', icon: 'none' })
+      const msg = error.message || '堆场列表加载失败'
+      this.setData({
+        yards: [],
+        yardNames: [],
+        yardsLoadError: msg.includes('fail') || msg.includes('timeout')
+          ? `${msg}：请确认手机能访问 config.js 里的 apiBaseUrl（含 :19207 端口）`
+          : msg
+      })
+      wx.showToast({ title: msg, icon: 'none', duration: 2800 })
     }
   },
 

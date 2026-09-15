@@ -104,6 +104,13 @@
   text-align: center;
 }
 
+.yards-error {
+  margin-top: 12rpx;
+  color: #b45309;
+  font-size: 22rpx;
+  line-height: 1.5;
+}
+
 .login-tip {
   margin-top: 24rpx;
   color: #147d55;

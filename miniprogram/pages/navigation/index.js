@@ -271,6 +271,18 @@ Page({
     }
   },
 
+  async syncExitGateAnchor(yardId) {
+    if (!this.scene || !this.scene.setExitGateAnchor || !yardId) return
+    try {
+      const exit = await request({ url: `/navigation/mobile/exit-target?yardId=${yardId}` })
+      if (exit && exit.entryLongitude != null && exit.entryLatitude != null) {
+        this.scene.setExitGateAnchor(exit.entryLongitude, exit.entryLatitude)
+      }
+    } catch (error) {
+      // 未配置出场口时不画固定道口
+    }
+  },
+
   async loadYardMap(cyId) {
     const user = auth.getUser() || {}
     const yardId = cyId || user.currentCyId
@@ -280,6 +292,7 @@ Page({
     }
     try {
       this.yardMapData = await request({ url: `/navigation/mobile/yards/${yardId}/map` })
+      await this.syncExitGateAnchor(yardId)
       this.setData({ mapError: '', mapLoading: true })
       this.syncScene({ rebuildMap: true })
       setTimeout(() => {
@@ -298,12 +311,7 @@ Page({
     const target = (route && route.target) || this.targetPoint || points[points.length - 1]
     this.routePoints = points || []
     this.targetPoint = target
-      ? {
-          longitude: target.longitude,
-          latitude: target.latitude,
-          entryLongitude: session.targetEntryLongitude,
-          entryLatitude: session.targetEntryLatitude
-        }
+      ? { longitude: target.longitude, latitude: target.latitude }
       : null
 
     const sessionId = session.id || this.sessionId
