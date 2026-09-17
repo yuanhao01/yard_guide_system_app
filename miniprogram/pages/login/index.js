@@ -62,6 +62,9 @@ Page({
       this.setData({
         yards: list, // 完整堆场对象，登录时要拿 id
         yardNames: list.map(item => item.cyName || String(item.id)), // 下拉显示名
+        // 默认展示查询到的第一个堆场，不用司机再手动点开选择
+        yardIndex: list.length ? 0 : -1,
+        yardName: list.length ? (list[0].cyName || '') : '',
         yardsLoadError: '' // 清掉上次的失败原因
       })
       // 接口通了但库里没有启用堆场
