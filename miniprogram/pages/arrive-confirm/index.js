@@ -1,5 +1,5 @@
 /**
- * 到位确认：到贝位后扫码核对箱区，确认后去验箱或出场。
+ * 到位确认：到贝位后直接确认，再去验箱或出场。
  * 依赖：request、location、specialNav、vehicleLoader（画集卡小景）、threejs。
  */
 const request = require('../../utils/request')
@@ -26,8 +26,7 @@ Page({
     equipmentHint: '等待堆高机完成作业', // 机械状态说明
     stepLabel: '到位作业', // 底部第三步名字
     parkTip: '请听从机械手指挥停车', // 停车提示
-    confirmBtnText: '扫码确认到位', // 主按钮字
-    confirmNeedScan: true, // 作业到位要扫码，出场确认不用
+    confirmBtnText: '确认到位', // 主按钮字
     confirming: false, // 正在提交确认
     mapLoading: true // 小景还在加载
   },
@@ -90,8 +89,7 @@ Page({
         equipmentHint: hint,
         stepLabel: purpose === 'exit' ? '出场确认' : '到位作业',
         parkTip: purpose === 'exit' ? '请按门岗指示驶离' : '请听从机械手指挥停车',
-        confirmBtnText: purpose === 'exit' ? '确认离场' : '扫码确认到位',
-        confirmNeedScan: purpose !== 'exit'
+        confirmBtnText: purpose === 'exit' ? '确认离场' : '确认到位'
       })
     } catch (error) {
       // 会话取不到时仍可确认到位
@@ -135,71 +133,9 @@ Page({
     })
   },
 
-  /** 主按钮：作业要先扫码，出场直接确认 */
+  /** 主按钮：直接确认到位/离场，不用扫码 */
   onConfirmTap() {
-    if (this.data.confirmNeedScan) {
-      this.scanConfirmArrive()
-    } else {
-      this.confirmArrive()
-    }
-  },
-
-  /** 扫贝位码再确认；取消扫码也可以直接确认 */
-  scanConfirmArrive() {
-    if (!this.data.sessionId || this.data.confirming) return
-    wx.scanCode({
-      scanType: ['qrCode'],
-      success: res => this.verifyScanThenConfirm(res.result || ''),
-      fail: err => {
-        if (err && /cancel/i.test(String(err.errMsg || ''))) return // 自己取消不提示
-        this.confirmArrive() // 扫失败就允许直接确认
-      }
-    })
-  },
-
-  /** 扫到的码和当前任务箱区对一下，不对要再问一句 */
-  async verifyScanThenConfirm(content) {
-    const text = String(content || '').trim()
-    if (!text) {
-      wx.showToast({ title: '未识别到二维码', icon: 'none' })
-      return
-    }
-    try {
-      const target = await request({
-        url: '/navigation/mobile/scan',
-        method: 'POST',
-        data: { content: text }
-      })
-      const session = this.session
-      if (session && target) {
-        // 场区对得上，或两边缺一边，都算过
-        const sameBlock = !session.targetBlockId || !target.blockId
-          || String(session.targetBlockId) === String(target.blockId)
-        const sameSlot = !session.targetSlot || !target.slot
-          || String(session.targetSlot) === String(target.slot)
-        if (!sameBlock || !sameSlot) {
-          wx.showModal({
-            title: '箱区不一致',
-            content: `扫码为 ${target.targetName || '其他位置'}，与当前任务 ${this.data.targetName} 不一致，仍要确认到位吗？`,
-            confirmText: '仍要确认',
-            success: r => {
-              if (r.confirm) this.confirmArrive()
-            }
-          })
-          return
-        }
-      }
-      await this.confirmArrive()
-    } catch (error) {
-      wx.showModal({
-        title: '二维码无效',
-        content: error.message || '无法解析该二维码，是否直接确认到位？',
-        confirmText: '直接确认',
-        success: r => {
-          if (r.confirm) this.confirmArrive()
-        }
-      })
-    }
+    this.confirmArrive()
   },
 
   /** 告诉后台已经到位，然后按下一步去验箱、出场或回首页 */
