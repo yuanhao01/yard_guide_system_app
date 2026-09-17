@@ -783,11 +783,17 @@ function createVignette(canvas, width, height, dpr, THREE, parts, kind) {
     highlight.rotation.x = -Math.PI / 2
     highlight.position.set(0, 0.04, 1.2)
     root.add(highlight)
-    const truck = instantiate(THREE, parts.truck) // 停在车道上的集卡
-    truck.position.set(0, 0, 1.6)
-    truck.rotation.y = 0
-    truck.scale.setScalar(0.5)
-    root.add(truck)
+    if (parts.truck && parts.truck.length) {
+      try {
+        const truck = instantiate(THREE, parts.truck) // 停在车道上的集卡
+        truck.position.set(0, 0, 1.6)
+        truck.rotation.y = 0
+        truck.scale.setScalar(0.5)
+        root.add(truck)
+      } catch (e) {
+        // 集卡模型未就绪时仍展示车道小景，不整块崩掉
+      }
+    }
     if (parts.stacker && parts.stacker.length) {
       try {
         const stacker = instantiate(THREE, parts.stacker) // 贝位前方作业的堆高机
