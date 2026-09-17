@@ -36,6 +36,7 @@ App({
   // 全小程序共用的一份数据，页面之间靠它传递「当前用户」和「刚选的目的地」
   globalData: {
     user: null, // 当前登录的司机或现场人员，没登录就是空
-    selectedTarget: null // 选贝位后暂存在这里，确认任务页再取走
+    selectedTarget: null, // 选贝位后暂存在这里，确认任务页再取走
+    navEtaMinutes: null // 导航页最新算出的预计分钟，协同群「预计到达」快捷回复要用它
   }
 })

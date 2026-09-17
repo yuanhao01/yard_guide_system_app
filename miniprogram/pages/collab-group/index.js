@@ -39,7 +39,7 @@ function applyDict(dict) {
 // 司机常用四句快捷回复
 const DRIVER_QUICK = [
   { label: '📍 确认位置', text: '已确认位置，正在前往' },
-  { label: '⏱ 预计到达', text: '预计 3 分钟到达作业点' },
+  { label: '⏱ 预计到达', text: '预计 {eta} 分钟到达作业点' },
   { label: '▶ 已出发', text: '已出发，请堆高机留意' },
   { label: '✓ 已到位', text: '已到位，等待指挥' }
 ]
@@ -48,7 +48,7 @@ const DRIVER_QUICK = [
 const ROLE_QUICK = {
   1: [
     { label: '🛠 正在就位', text: '堆高机正在就位' },
-    { label: '⏱ 预计到达', text: '预计 3 分钟到达作业点' },
+    { label: '⏱ 预计到达', text: '预计 {eta} 分钟到达作业点' },
     { label: '✓ 可以作业', text: '已就位，可以作业' },
     { label: '⚠ 注意箱位', text: '请注意箱位，按指令作业' }
   ],
@@ -64,6 +64,14 @@ const ROLE_QUICK = {
     { label: '⚠ 注意安全', text: '注意场内安全' },
     { label: '✓ 已确认', text: '任务已确认' }
   ]
+}
+
+/** 把快捷回复里的 {eta} 换成导航页算出的真实预计分钟；导航页还没算出来就退回默认值，不显示假数字 */
+function resolveQuickText(text) {
+  if (!text || text.indexOf('{eta}') === -1) return text
+  const app = getApp()
+  const eta = app && app.globalData ? app.globalData.navEtaMinutes : null
+  return text.replace('{eta}', eta != null ? String(eta) : '几')
 }
 
 /** 按当前登录身份挑一组快捷回复 */
@@ -438,7 +446,7 @@ Page({
 
   /** 点快捷回复直接发出去 */
   sendQuick(e) {
-    this.submit(e.currentTarget.dataset.text)
+    this.submit(resolveQuickText(e.currentTarget.dataset.text))
   },
 
   /** 点发送或键盘发送 */

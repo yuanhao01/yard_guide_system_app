@@ -75,8 +75,13 @@ function pickRemainingMeters(page, session, route) {
 /** 按剩余米数估几分钟（场内大约按 10 公里/小时） */
 function estimateMinutes(meters) {
   const seconds = Math.max(0, Number(meters) || 0) / 2.78
-  if (seconds < 90) return 1
-  return Math.max(1, Math.round(seconds / 60))
+  const minutes = seconds < 90 ? 1 : Math.max(1, Math.round(seconds / 60))
+  // 同步到全局，协同群「预计到达」快捷回复要用同一个真实值，不能各算各的
+  const app = getApp()
+  if (app && app.globalData) {
+    app.globalData.navEtaMinutes = minutes
+  }
+  return minutes
 }
 
 /** 车头是不是和这条单行道规定方向相反 */
