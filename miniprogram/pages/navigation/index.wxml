@@ -1,3 +1,4 @@
+<!-- 场内导航：顶栏、转向提示、三维场图、底部剩余距离和结束 -->
 <view class="nav-page">
   <!-- 对齐高保真 02：整块深蓝顶栏，不再叠系统绿导航栏 -->
   <view class="nav-header" style="padding-top: {{statusBarHeight}}px;">
@@ -11,11 +12,13 @@
     </view>
   </view>
 
+  <!-- 下一句转向提示：箭头 + 文案 -->
   <view class="banner">
     <view class="banner-arrow">{{instructionIcon}}</view>
     <view class="banner-text">{{instruction}}</view>
   </view>
 
+  <!-- 三维堆场图和左上工具、右下缩放 -->
   <view class="map-wrap">
     <canvas type="webgl" id="yardCanvas" class="yard-canvas"
             bindtouchstart="onCanvasTouchStart"
@@ -54,6 +57,7 @@
     <view class="map-empty" wx:if="{{mapError}}">{{mapError}}</view>
   </view>
 
+  <!-- 底部：目的地、剩余、预计、限速、确认到达、结束 -->
   <view class="bottom-card">
     <view class="metrics">
       <view class="metric metric-dest">
@@ -74,11 +78,12 @@
       <view class="chip chip-warn">⚠ {{offYardHint}}，进入堆场后自动跟车</view>
     </view>
 
-    <view class="chips" wx:if="{{oneWayHint || speedLimit}}">
+    <view class="chips" wx:if="{{oneWayHint || speedLimit || overspeed}}">
       <view class="chip chip-warn" wx:if="{{oneWayHint}}">⚠ {{oneWayHint}}</view>
       <view class="chip chip-danger" wx:if="{{speedLimit}}">
         <text class="chip-badge">{{speedLimit}}</text>限速 {{speedLimit}}
       </view>
+      <view class="chip chip-danger" wx:if="{{overspeed}}">⚠ 超速</view>
     </view>
 
     <button wx:if="{{arrivalSuggestion}}" class="arrival-btn" bindtap="confirmArrival">已到达，确认完成</button>

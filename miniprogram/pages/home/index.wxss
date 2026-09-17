@@ -1,15 +1,27 @@
+/* 首页不用通用页的顶内边距，绿色顶栏要贴顶 */
 .home-page {
   padding-top: 0;
 }
 
+/* 顶部深绿：从状态栏铺到堆场名，不再单独切一层导航栏 */
 .hero {
   margin: 0 -32rpx 36rpx;
-  padding: 64rpx 40rpx 52rpx;
-  border-radius: 0 0 44rpx 44rpx;
+  padding: 0 40rpx 52rpx;
   color: #ffffff;
-  background: linear-gradient(135deg, #12372a, #1a694b);
+  background: linear-gradient(180deg, #0c2820 0%, #12372a 36%, #1a694b 100%);
 }
 
+/* 自定义顶栏上的系统名，替代原来微信自带那一条 */
+.hero-brand {
+  margin-bottom: 28rpx;
+  color: rgba(255, 255, 255, 0.92);
+  font-size: 28rpx;
+  font-weight: 600;
+  letter-spacing: 1rpx;
+  text-align: center;
+}
+
+/* 堆场名和右侧「切换」横排 */
 .hero-top {
   display: flex;
   align-items: flex-start;
@@ -17,6 +29,7 @@
   gap: 20rpx;
 }
 
+/* 能进多个堆场时右上角切换胶囊 */
 .yard-switch {
   flex-shrink: 0;
   min-width: 180rpx;
@@ -27,6 +40,7 @@
   text-align: right;
 }
 
+/* 胶囊里当前堆场名，太长打点 */
 .yard-switch-name {
   max-width: 220rpx;
   overflow: hidden;
@@ -37,27 +51,32 @@
   text-overflow: ellipsis;
 }
 
+/* 胶囊里「切换」二字 */
 .yard-switch-action {
   margin-top: 2rpx;
   color: rgba(255, 255, 255, 0.72);
   font-size: 20rpx;
 }
 
+/* 「当前堆场 / 现场岗位」小字 */
 .hero-label {
   color: rgba(255, 255, 255, 0.62);
   font-size: 24rpx;
 }
 
+/* 顶部大标题：堆场名或岗位姓名 */
 .hero-title {
   margin: 12rpx 0 26rpx;
   font-size: 42rpx;
   font-weight: 700;
 }
 
+/* 「导航服务已连接」那一行 */
 .hero-status {
   font-size: 24rpx;
 }
 
+/* 状态前的绿色小圆点 */
 .status-dot {
   display: inline-block;
   width: 14rpx;
@@ -67,6 +86,7 @@
   background: #62e6a8;
 }
 
+/* 司机进行中任务的橙色卡 */
 .current-card {
   position: relative;
   margin-bottom: 36rpx;
@@ -77,6 +97,7 @@
   background: #d58424;
 }
 
+/* 橙色卡左上「进行中」 */
 .current-tag {
   display: inline-block;
   padding: 6rpx 14rpx;
@@ -85,18 +106,21 @@
   font-size: 21rpx;
 }
 
+/* 橙色卡标题：前往某某 */
 .current-title {
   margin-top: 18rpx;
   font-size: 32rpx;
   font-weight: 700;
 }
 
+/* 橙色卡说明：剩余米数等 */
 .current-detail {
   margin-top: 10rpx;
   color: rgba(255, 255, 255, 0.78);
   font-size: 24rpx;
 }
 
+/* 橙色卡右下角「继续导航」 */
 .current-action {
   position: absolute;
   right: 30rpx;
@@ -105,6 +129,7 @@
   font-weight: 600;
 }
 
+/* 「选择导航方式 / 协同交流群」小节标题 */
 .section-title {
   margin: 0 4rpx 20rpx;
   color: #52635b;
@@ -112,6 +137,7 @@
   font-weight: 600;
 }
 
+/* 手动选贝位、扫一扫两张白卡 */
 .action-card {
   display: flex;
   align-items: center;
@@ -122,6 +148,7 @@
   background: #ffffff;
 }
 
+/* 白卡左边绿色方标 */
 .action-icon {
   width: 92rpx;
   height: 92rpx;
@@ -134,33 +161,40 @@
   text-align: center;
 }
 
+/* 「选」字用浅橙底，和扫码绿标区分 */
 .select-icon {
   color: #9a5a0a;
   background: #fff0d9;
 }
 
+/* 方标右边的标题和说明 */
 .action-content {
   flex: 1;
   margin-left: 26rpx;
 }
 
+/* 白卡主标题 */
 .action-title {
   font-size: 31rpx;
   font-weight: 700;
 }
 
+/* 白卡灰色说明 */
 .action-desc {
   margin-top: 9rpx;
   color: #7c8983;
   font-size: 23rpx;
 }
 
+/* 白卡右侧箭头 */
 .arrow {
   color: #9ba7a1;
   font-size: 50rpx;
 }
 
+/* 协同群深蓝卡片 */
 .collab-card {
+  position: relative;
   margin: 8rpx 0 28rpx;
   padding: 28rpx;
   border-radius: 24rpx;
@@ -169,19 +203,20 @@
   box-shadow: 0 12rpx 28rpx rgba(15, 44, 80, 0.18);
 }
 
+/* 卡片顶：标签和进行中 */
 .collab-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  padding-right: 72rpx;
 }
 
-.collab-head-right {
-  display: flex;
-  align-items: center;
-  gap: 12rpx;
-}
-
+/* 卡片右上角未读数字 */
 .collab-unread {
+  position: absolute;
+  top: -10rpx;
+  right: -8rpx;
+  z-index: 2;
   min-width: 36rpx;
   height: 36rpx;
   padding: 0 10rpx;
@@ -192,8 +227,10 @@
   font-weight: 700;
   line-height: 36rpx;
   text-align: center;
+  box-shadow: 0 4rpx 10rpx rgba(255, 77, 79, 0.35);
 }
 
+/* 「任务协同」小标签 */
 .collab-tag {
   padding: 4rpx 14rpx;
   border-radius: 8rpx;
@@ -201,31 +238,53 @@
   font-size: 20rpx;
 }
 
+/* 「进行中」绿字 */
 .collab-status {
   color: #7dffa8;
   font-size: 22rpx;
 }
 
+/* 群名 */
 .collab-title {
   margin-top: 16rpx;
   font-size: 30rpx;
   font-weight: 700;
 }
 
+/* 最后一句预览 */
 .collab-desc {
   margin-top: 8rpx;
   color: rgba(255, 255, 255, 0.72);
   font-size: 22rpx;
 }
 
-.collab-members {
+/* 成员名和时间横排 */
+.collab-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16rpx;
   margin-top: 18rpx;
   padding-top: 16rpx;
   border-top: 1rpx solid rgba(255, 255, 255, 0.12);
+}
+
+/* 成员名那一行 */
+.collab-members {
+  flex: 1;
+  min-width: 0;
   color: rgba(255, 255, 255, 0.86);
   font-size: 23rpx;
 }
 
+/* 最近一条消息时间 */
+.collab-time {
+  flex-shrink: 0;
+  color: rgba(255, 255, 255, 0.56);
+  font-size: 20rpx;
+}
+
+/* 底部行车安全提示黄条 */
 .safety-card {
   margin-top: 42rpx;
   padding: 26rpx;
@@ -234,12 +293,14 @@
   background: #fff8eb;
 }
 
+/* 安全提示标题 */
 .safety-title {
   color: #7c490a;
   font-size: 25rpx;
   font-weight: 700;
 }
 
+/* 安全提示正文 */
 .safety-text {
   margin-top: 10rpx;
   color: #826a4c;
@@ -247,6 +308,7 @@
   line-height: 1.7;
 }
 
+/* 岗位没有群时的虚线空状态 */
 .empty-card {
   margin-bottom: 28rpx;
   padding: 42rpx 30rpx;
@@ -255,12 +317,14 @@
   background: #f7faf8;
 }
 
+/* 空状态标题 */
 .empty-title {
   color: #2d3d36;
   font-size: 30rpx;
   font-weight: 700;
 }
 
+/* 空状态说明 */
 .empty-desc {
   margin-top: 12rpx;
   color: #7c8983;

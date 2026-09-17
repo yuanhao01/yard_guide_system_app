@@ -1,4 +1,6 @@
+<!-- 我的：头像资料 + 一排信息 + 退出 -->
 <view class="page profile-page">
+  <!-- 顶部绿色资料卡：头像、姓名、身份 -->
   <view class="profile-card">
     <view class="avatar">{{avatarText}}</view>
     <view>
@@ -7,6 +9,7 @@
     </view>
   </view>
 
+  <!-- 堆场、账号、岗位、车牌、定位用途、系统权限 -->
   <view class="card info-card">
     <view class="info-row"><text>当前堆场</text><text>{{yardName || '--'}}</text></view>
     <view class="info-row"><text>登录账号</text><text>{{user.userAccount || user.roleCode || '--'}}</text></view>

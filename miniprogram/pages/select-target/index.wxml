@@ -1,13 +1,17 @@
+<!-- 手动选贝位：三级下拉 + 确认 -->
 <view class="page">
-  <view class="hint">按堆场 → 场区 → 贝位选择目的地</view>
+  <view class="hint">{{lockYard ? '按场区 → 贝位选择目的地' : '按堆场 → 场区 → 贝位选择目的地'}}</view>
   <view class="card selector-card">
+    <!-- 第一步：车牌进场已锁定堆场，不再让选 -->
     <view class="selector-row">
       <view class="selector-label"><text class="step-number">1</text>堆场</view>
-      <picker range="{{yards}}" range-key="label" value="{{yardIndex}}" bindchange="onYardChange">
+      <view wx:if="{{lockYard}}" class="picker-value">{{lockedYardName || '当前堆场'}}</view>
+      <picker wx:else range="{{yards}}" range-key="label" value="{{yardIndex}}" bindchange="onYardChange">
         <view class="picker-value {{yardIndex >= 0 ? '' : 'placeholder'}}">{{yardIndex >= 0 ? yards[yardIndex].label : '请选择堆场'}} <text>›</text></view>
       </picker>
     </view>
     <view class="divider"></view>
+    <!-- 第二步选场区 -->
     <view class="selector-row">
       <view class="selector-label"><text class="step-number">2</text>场区</view>
       <picker disabled="{{!(yardIndex >= 0) || loadingYard}}" range="{{blocks}}" range-key="label" value="{{blockIndex}}" bindchange="onBlockChange">
@@ -15,6 +19,7 @@
       </picker>
     </view>
     <view class="divider"></view>
+    <!-- 第三步选贝位 -->
     <view class="selector-row">
       <view class="selector-label"><text class="step-number">3</text>贝位</view>
       <picker disabled="{{!(blockIndex >= 0) || loadingBays}}" range="{{bays}}" range-key="label" value="{{bayIndex}}" bindchange="onBayChange">

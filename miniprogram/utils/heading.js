@@ -1,33 +1,36 @@
 /**
  * 手机朝向：正北 0°，顺时针为正。
+ * 平放跟指南针；倾斜后锁住姿态，避免小米等机型指南针随俯仰乱漂，车头才稳。
+ * 导航页、验箱页用这里的角度转场图上的集卡。
  */
 
-let heading = null
-let source = ''
-let started = false
-let listenersBound = false
-let platform = ''
-let sdk = ''
-let lastBeta = 25
-let lastGamma = 0
-let lastAlpha = null
-let lastMotionAt = 0
-let lastGyroAt = 0
-let lastCompassAt = 0
-let lastCompass = null
-let fused = null
-let headingOffset = null
-let prevMotionH = null
-let lastAccel = { x: 0, y: 0, z: 1 }
-const listeners = []
+let heading = null // 当前对外公布的车头朝向
+let source = '' // 这个朝向来自指南针、姿态还是陀螺
+let started = false // 有没有开始听传感器
+let listenersBound = false // 有没有挂上微信回调
+let platform = '' // 手机系统，调试用
+let sdk = '' // 微信版本，调试用
+let lastBeta = 25 // 最近一次前后倾斜
+let lastGamma = 0 // 最近一次左右倾斜
+let lastAlpha = null // 最近一次绕竖轴转角
+let lastMotionAt = 0 // 上次收到姿态的时间
+let lastGyroAt = 0 // 上次收到陀螺的时间
+let lastCompassAt = 0 // 上次收到指南针的时间
+let lastCompass = null // 上次可信的指南针角度
+let fused = null // 融合后的朝向（还没对外平滑）
+let headingOffset = null // 姿态角和真北之间的固定偏差
+let prevMotionH = null // 上一帧姿态算出的朝向，用来抓突然跳变
+let lastAccel = { x: 0, y: 0, z: 1 } // 最近加速度，用来认手机平放还是竖着
+const listeners = [] // 导航页等注册的朝向回调
 
+// 调试面板用的计数，真机看传感器开没开、丢了多少包
 const debug = {
   platform: '',
   sdk: '',
   started: false,
   heading: null,
   source: '',
-  published: 0,
+  published: 0, // 对外通知了几次
   compass: { n: 0, drop: 0, last: null, acc: '', ok: '', fail: '', reason: '' },
   motion: { n: 0, drop: 0, last: '', ok: '', fail: '', reason: '' },
   gyro: { n: 0, drop: 0, last: '', ok: '', fail: '', reason: '' },
@@ -37,8 +40,9 @@ const debug = {
   device: ''
 }
 
-function log() {}
+function log() {} // 正式包不打日志，需要时再打开
 
+/** 把角度收到 0～360 */
 function normalize(deg) {
   let value = Number(deg)
   if (Number.isNaN(value)) return null
@@ -47,20 +51,24 @@ function normalize(deg) {
   return value
 }
 
+/** 从 A 转到 B 该走较短的那一侧，结果在 -180～180 */
 function shortestDiff(from, to) {
   return ((to - from + 540) % 360) - 180
 }
 
+/** 朝向平滑过渡，避免车头突然甩 90 度 */
 function lerpAngle(from, to, t) {
   return normalize(from + shortestDiff(from, to) * t)
 }
 
+/** 调试显示保留一位小数 */
 function round1(value) {
   const n = Number(value)
   if (Number.isNaN(n)) return '-'
   return Math.round(n * 10) / 10
 }
 
+/** 对外公布一个新朝向；变化不到 1.2 度就不必打扰导航页 */
 function publish(next, from) {
   const value = normalize(next)
   if (value == null) return
@@ -76,19 +84,21 @@ function publish(next, from) {
   })
 }
 
+/** 把新测到的朝向按偏差大小平滑后公布 */
 function setFused(next, from) {
   const value = normalize(next)
   if (value == null) return
   fused = value
   if (heading == null) {
-    publish(value, from)
+    publish(value, from) // 第一次直接用
     return
   }
   const err = Math.abs(shortestDiff(heading, value))
-  const t = err > 40 ? 0.5 : err > 15 ? 0.28 : 0.14
+  const t = err > 40 ? 0.5 : err > 15 ? 0.28 : 0.14 // 差得大跟得快，差得小跟得慢
   publish(lerpAngle(heading, value, t), from)
 }
 
+/** 指南针来了：不可信或对穿跳变就丢掉 */
 function onCompass(res) {
   debug.compass.n += 1
   if (debug.compass.n <= 3) log('compass raw', res)
@@ -135,7 +145,7 @@ function onCompass(res) {
 function headingFromMotion(alpha, beta, gamma) {
   if (alpha == null || Number.isNaN(Number(alpha))) return null
   const tilt = Math.hypot(Number(beta) || 0, Number(gamma) || 0)
-  if (tilt < 8) return normalize(alpha)
+  if (tilt < 8) return normalize(alpha) // 几乎平放，直接用绕竖轴角
   const toRad = Math.PI / 180
   const x = (Number(beta) || 0) * toRad
   const y = (Number(gamma) || 0) * toRad
@@ -146,14 +156,15 @@ function headingFromMotion(alpha, beta, gamma) {
   const sX = Math.sin(x)
   const sY = Math.sin(y)
   const sZ = Math.sin(z)
-  const vx = -cZ * sY - sZ * sX * cY
-  const vy = -sZ * sY + cZ * sX * cY
+  const vx = -cZ * sY - sZ * sX * cY // 设备顶边在水平面上的东向
+  const vy = -sZ * sY + cZ * sX * cY // 设备顶边在水平面上的北向
   if (Math.abs(vx) < 1e-6 && Math.abs(vy) < 1e-6) return normalize(alpha)
   let heading = Math.atan2(vx, vy) * 180 / Math.PI
   if (heading < 0) heading += 360
   return normalize(heading)
 }
 
+/** 姿态角来了：记下倾斜，再融合 */
 function onMotion(res) {
   debug.motion.n += 1
   if (!res) return
@@ -177,6 +188,7 @@ function fuseFromSensors() {
   const compassOk = lastCompass != null && lastCompassAt && (Date.now() - lastCompassAt < 800)
   debug.mode = tilt < 22 ? 'flat-compass' : (tilt > 62 ? 'upright-lock' : 'tilt-lock')
 
+  // 姿态角突然跳一大截，多半是传感器复位，把偏置一起改掉，车头才不甩
   if (motionH != null && prevMotionH != null && headingOffset != null) {
     const jump = Math.abs(shortestDiff(prevMotionH, motionH))
     if (jump > 35) {
@@ -186,6 +198,7 @@ function fuseFromSensors() {
   }
   if (motionH != null) prevMotionH = motionH
 
+  // 平放且指南针还新鲜：跟真北，并记下姿态和真北的差
   if (tilt < 22 && compassOk) {
     if (motionH != null) headingOffset = shortestDiff(motionH, lastCompass)
     debug.motion.reason = 'flat-cmp'
@@ -200,17 +213,19 @@ function fuseFromSensors() {
   }
 
   if (headingOffset == null && lastCompass != null) {
-    headingOffset = shortestDiff(motionH, lastCompass)
+    headingOffset = shortestDiff(motionH, lastCompass) // 第一次用指南针标定偏置
   }
   const locked = headingOffset == null ? motionH : normalize(motionH + headingOffset)
   debug.motion.reason = 'lock ' + (headingOffset == null ? '-' : round1(headingOffset))
   setFused(locked, 'motion-h')
 }
 
+/** 手机相对水平面倾斜了多少度 */
 function tiltFromFlatDeg() {
   return Math.min(90, Math.hypot(lastBeta || 0, lastGamma || 0))
 }
 
+/** 是不是竖着拿（超过 62 度） */
 function phoneUpright() {
   return tiltFromFlatDeg() > 62
 }
@@ -219,6 +234,7 @@ function phoneInPortrait() {
   return phoneUpright()
 }
 
+/** 是不是平放在座椅/仪表台上 */
 function phoneIsFlat() {
   if (phoneUpright()) return false
   const n = Math.hypot(lastAccel.x, lastAccel.y, lastAccel.z)
@@ -226,6 +242,7 @@ function phoneIsFlat() {
   return tiltFromFlatDeg() < 28
 }
 
+/** 绕重力方向转了多快，用来在姿态暂时没来时靠陀螺补 */
 function gravityYawRate(wx, wy, wz) {
   let ax = lastAccel.x
   let ay = lastAccel.y
@@ -238,6 +255,7 @@ function gravityYawRate(wx, wy, wz) {
   return -(wz * (1 - tilt) + wy * tilt)
 }
 
+/** 陀螺来了：姿态和指南针都新鲜时不用它，避免抢车头 */
 function onGyro(res) {
   debug.gyro.n += 1
   if (debug.gyro.n <= 3) log('gyro raw', res)
@@ -280,6 +298,7 @@ function onGyro(res) {
   setFused(fused, 'gyro')
 }
 
+/** 记下手机品牌和微信版本，方便真机对传感器问题 */
 function detectPlatform() {
   try {
     const info = wx.getSystemInfoSync() || {}
@@ -295,6 +314,7 @@ function detectPlatform() {
   debug.sdk = sdk
 }
 
+/** 加速度来了：用来认平放/竖拿 */
 function onAccel(res) {
   debug.accel.n += 1
   if (!res) return
@@ -304,6 +324,7 @@ function onAccel(res) {
   debug.accel.last = 'x' + round1(res.x) + ' y' + round1(res.y) + ' z' + round1(res.z)
 }
 
+/** 挂上微信四路传感器回调，只挂一次 */
 function bindListeners() {
   if (listenersBound) return
   listenersBound = true
@@ -324,6 +345,7 @@ function failMsg(err) {
   return msg
 }
 
+/** 停掉四路硬件，省电、也方便再开一次 */
 function stopHardware() {
   try { if (wx.stopCompass) wx.stopCompass() } catch (error) { /* ignore */ }
   try { if (wx.stopDeviceMotionListening) wx.stopDeviceMotionListening() } catch (error) { /* ignore */ }
@@ -331,6 +353,7 @@ function stopHardware() {
   try { if (wx.stopAccelerometer) wx.stopAccelerometer() } catch (error) { /* ignore */ }
 }
 
+/** 开一路传感器，成功失败都记到调试槽里 */
 function startOne(name, api, extra, slot) {
   return new Promise(resolve => {
     if (!api) {
@@ -362,6 +385,7 @@ function startOne(name, api, extra, slot) {
   })
 }
 
+/** 点屏幕触发时先走隐私授权，有的安卓不授权指南针不开 */
 function withPrivacy() {
   return new Promise(resolve => {
     if (!wx.requirePrivacyAuthorize) {
@@ -384,10 +408,11 @@ function withPrivacy() {
   })
 }
 
-let starting = false
-let hardwareReady = false
-let everStartedOk = false
+let starting = false // 正在按顺序开传感器
+let hardwareReady = false // 至少有一路开成功
+let everStartedOk = false // 曾经开成功过，再开前先停硬件
 
+/** 指南针 → 姿态 → 陀螺 → 加速度，一路失败再试一次 */
 function startSequential() {
   return startOne('compass', wx.startCompass, {}, debug.compass)
     .then(ok => {
@@ -424,6 +449,7 @@ function startSequential() {
     })
 }
 
+/** 开始听朝向；已经开着且没要求强制重开就不再开 */
 function start(opts) {
   const options = opts || {}
   detectPlatform()
@@ -444,18 +470,20 @@ function start(opts) {
   debug.mode = options.fromTap ? 'tap' : 'auto'
   log('start', { platform, sdk, mode: debug.mode })
   const run = () => {
-    if (everStartedOk) stopHardware()
+    if (everStartedOk) stopHardware() // 再开前先停，避免安卓占着开不了
     setTimeout(() => startSequential(), everStartedOk ? 160 : 0)
   }
   if (options.fromTap) withPrivacy().then(run)
   else run()
 }
 
+/** 司机点了屏幕再开：带隐私授权和强制重开 */
 function startFromTap() {
   hardwareReady = false
   start({ force: true, fromTap: true })
 }
 
+/** 离开导航页时停掉全部传感器 */
 function stop() {
   starting = false
   hardwareReady = false
@@ -471,6 +499,7 @@ function stop() {
   stopHardware()
 }
 
+/** 当前车头朝向，还没有就空 */
 function get() {
   return heading
 }
@@ -479,6 +508,7 @@ function getSource() {
   return source
 }
 
+/** 指南针还没出数时，先用 GPS 方向垫上，车头不至于对着 0 */
 function seed(deg) {
   if (heading != null && source && source !== 'gps') return
   const value = normalize(deg)
@@ -491,6 +521,7 @@ function seed(deg) {
   log('seed', value)
 }
 
+/** 把调试计数整包交出去 */
 function dump() {
   return {
     platform: debug.platform,
@@ -508,6 +539,7 @@ function dump() {
   }
 }
 
+/** 拼几行给人看的调试字，真机对照传感器用 */
 function formatDebug() {
   const c = debug.compass
   const m = debug.motion
@@ -531,6 +563,7 @@ function formatDebug() {
   ].join('\n')
 }
 
+/** 用当前指南针对齐车头，并锁住姿态偏置 */
 function calibrate() {
   const value = lastCompass != null ? lastCompass : heading
   if (value == null) return false
@@ -548,6 +581,7 @@ function calibrate() {
   return true
 }
 
+/** 订阅朝向变化，返回取消订阅的函数 */
 function onChange(fn) {
   if (typeof fn === 'function' && listeners.indexOf(fn) < 0) listeners.push(fn)
   return () => {
@@ -557,13 +591,13 @@ function onChange(fn) {
 }
 
 module.exports = {
-  start,
-  startFromTap,
-  stop,
-  get,
-  getSource,
-  seed,
-  calibrate,
+  start, // 开始听朝向
+  startFromTap, // 点屏幕再开
+  stop, // 离开页停掉
+  get, // 当前朝向
+  getSource, // 朝向来源
+  seed, // 用 GPS 先垫上
+  calibrate, // 按指南针对齐
   dump,
   formatDebug,
   onChange

@@ -1,3 +1,7 @@
+/**
+ * 场内导航：跟车画蓝线、报下一句、上报位置、到了跳到位确认。
+ * 依赖：config、request、auth、location、yardScene、voice、routeInstruction、heading。
+ */
 const config = require('../../config')
 const request = require('../../utils/request')
 const auth = require('../../utils/auth')
@@ -6,18 +10,21 @@ const yardScene = require('../../utils/yardScene')
 const voice = require('../../utils/voice')
 const routeInstruction = require('../../utils/routeInstruction')
 const headingSensor = require('../../utils/heading')
+const yardSocket = require('../../utils/yardSocket')
 
 /**
  * 从转向文案里挑一个箭头，和高保真 02 屏的提示条一致。
  */
 function displayAreaText(text) {
-  return routeInstruction.displayAreaName(text)
+  return routeInstruction.displayAreaName(text) // 场区名改成「区」
 }
 
+/** 沿场图蓝线还剩多少米 */
 function remainingAlongRoute(self, points, blocks) {
   return routeInstruction.remainingAlongRoute(self, points, blocks)
 }
 
+/** 优先用场图上已画蓝线报下一句，没有再按规划折线 */
 function pickLocalInstruction(page, targetName, fallback) {
   const painted = page.scene && page.scene.getPaintedRoute && page.scene.getPaintedRoute()
   const selfWorld = page.scene && page.scene.getSelfWorld && page.scene.getSelfWorld()
@@ -30,21 +37,23 @@ function pickLocalInstruction(page, targetName, fallback) {
   return displayAreaText(local || fallback || '沿推荐路线行驶')
 }
 
+/** 挑一个给司机看的剩余米数：车还在另一条路时不能用短折线报「即将到达」 */
 function pickRemainingMeters(page, session, route) {
   const blocks = page.yardMapData && page.yardMapData.blocks
-  const along = remainingAlongRoute(page.self, page.routePoints, blocks)
+  const along = remainingAlongRoute(page.self, page.routePoints, blocks) // 沿折线剩余
   const planned = Number((route && route.distanceMeters)
-    || (session && session.route && session.route.distanceMeters))
+    || (session && session.route && session.route.distanceMeters)) // 规划全长
   const painted = page.scene && page.scene.getPaintedRoute && page.scene.getPaintedRoute()
-  const paintedRemain = routeInstruction.remainingAlongWorld(painted)
-  const fromSession = Number(session && session.remainingDistanceMeters)
+  const paintedRemain = routeInstruction.remainingAlongWorld(painted) // 已画蓝线剩余
+  const fromSession = Number(session && session.remainingDistanceMeters) // 后台给的剩余
   const p0 = page.routePoints && page.routePoints[0]
   const gapToRoute = page.self && p0 && page.self.x != null && p0.x != null
     ? Math.hypot(page.self.x - p0.x, page.self.y - p0.y)
-    : 0
+    : 0 // 车离规划起点多远
   const toTarget = page.self && page.targetPoint
     ? Math.hypot(page.self.x - page.targetPoint.x, page.self.y - page.targetPoint.y)
-    : 0
+    : 0 // 车离目的地直线距离
+  // 车还在另一条路上、折线只剩终点 4 米时，不能用这段短线报剩余/即将到达
   if (gapToRoute > 25 && toTarget > 25) {
     return Math.max(along, toTarget, 1)
   }
@@ -63,31 +72,35 @@ function pickRemainingMeters(page, session, route) {
   return 0
 }
 
+/** 按剩余米数估几分钟（场内大约按 10 公里/小时） */
 function estimateMinutes(meters) {
   const seconds = Math.max(0, Number(meters) || 0) / 2.78
   if (seconds < 90) return 1
   return Math.max(1, Math.round(seconds / 60))
 }
 
+/** 车头是不是和这条单行道规定方向相反 */
 function headingAgainstOneWay(self, road) {
   if (!self || !road || !road.path || road.path.length < 2) return false
-  const dir = Number(road.directionType)
+  const dir = Number(road.directionType) // 1、2 才是单行
   if (dir !== 1 && dir !== 2) return false
   const a = road.path[0]
   const b = road.path[road.path.length - 1]
   // 场图 Y 南增，北向分量取反后才能和罗盘航向（0 正北）对齐
   let allowed = Math.atan2(b.x - a.x, a.y - b.y) * 180 / Math.PI
-  if (dir === 2) allowed += 180
+  if (dir === 2) allowed += 180 // 反向单行
   const heading = self.heading == null ? null : Number(self.heading)
   if (heading == null || Number.isNaN(heading)) return false
   const diff = Math.abs(((heading - allowed + 540) % 360) - 180)
-  return diff > 100
+  return diff > 100 // 差超过 100 度当逆行
 }
 
+/** 指南针圆盘要转多少度，让「北」对着场图北方 */
 function compassRotateOf(status) {
   return status && typeof status.bearingDeg === 'number' ? status.bearingDeg : 0
 }
 
+/** 把车吸到最近车道上（本页上报时用来对照路，不再本地改坐标） */
 function snapSelfToRoad(page, self) {
   const roads = page.yardMapData && page.yardMapData.roads
   if (!roads || !roads.length || !self || self.x == null || self.y == null) {
@@ -101,6 +114,7 @@ function snapSelfToRoad(page, self) {
   }
 }
 
+/** 车已经开到另一条路，记下要强制后台重算路线 */
 function maybeForceRerouteIfRoadMismatch(page) {
   const roads = page.yardMapData && page.yardMapData.roads
   const p0 = page.routePoints && page.routePoints[0]
@@ -115,6 +129,7 @@ function maybeForceRerouteIfRoadMismatch(page) {
   }
 }
 
+/** 从转向文案里挑提示条左边的箭头 */
 function instructionArrow(text) {
   if (!text) return '↑'
   if (/直行[\d.]+米后右转|前方.*右转/.test(text)) return '↱'
@@ -127,10 +142,12 @@ function instructionArrow(text) {
   return '↑'
 }
 
+/** 两指距离，捏合缩放用 */
 function touchDistance(touches) {
   return Math.hypot(touches[0].x - touches[1].x, touches[0].y - touches[1].y)
 }
 
+/** 两指中点 */
 function touchMidpoint(touches) {
   return {
     x: (touches[0].x + touches[1].x) / 2,
@@ -138,10 +155,12 @@ function touchMidpoint(touches) {
   }
 }
 
+/** 两指连线角度 */
 function touchAngle(touches) {
   return Math.atan2(touches[1].y - touches[0].y, touches[1].x - touches[0].x)
 }
 
+/** 转角收到正负半圈 */
 function normalizeAngleDelta(delta) {
   while (delta > Math.PI) delta -= Math.PI * 2
   while (delta < -Math.PI) delta += Math.PI * 2
@@ -150,47 +169,53 @@ function normalizeAngleDelta(delta) {
 
 Page({
   data: {
-    session: {},
-    instruction: '正在准备路线',
-    instructionIcon: '↑',
-    remainingDistance: '--',
-    estimatedMinutes: '--',
-    locationQuality: '等待定位',
-    locationQualityClass: '',
-    arrivalSuggestion: false,
-    voiceOn: true,
-    followMode: true,
-    speedLimit: '',
-    oneWayHint: '',
-    offYardHint: '',
-    mapError: '',
-    mapLoading: true,
-    viewAdjusted: false,
-    locating: false,
+    session: {}, // 这一趟导航
+    instruction: '正在准备路线', // 下一句提示
+    instructionIcon: '↑', // 提示条箭头
+    remainingDistance: '--', // 剩余米数
+    estimatedMinutes: '--', // 预计分钟
+    locationQuality: '等待定位', // 定位好不好
+    locationQualityClass: '', // 绿点/橙点
+    arrivalSuggestion: false, // 后台认为到了
+    voiceOn: true, // 语音开着
+    followMode: true, // 镜头跟车
+    speedLimit: '', // 当前路限速
+    overspeed: false, // 当前车速是否超过所在路限速
+    oneWayHint: '', // 单行/逆行提示
+    offYardHint: '', // 车在场外多远
+    mapError: '', // 场图失败原因
+    mapLoading: true, // 场图加载中
+    viewAdjusted: false, // 司机是否手势挪过镜头
+    locating: false, // 正在点「定位自己」
     statusBarHeight: 20,
-    flatMode: true,
-    compassRotate: 0
+    flatMode: true, // 默认俯视
+    compassRotate: 0 // 指南针圆盘转角
   },
 
+  /** 进页：建场图、订指南针、拉会话并开始跟车 */
   onLoad(options) {
     const windowInfo = wx.getWindowInfo ? wx.getWindowInfo() : wx.getSystemInfoSync()
     this.setData({ statusBarHeight: (windowInfo && windowInfo.statusBarHeight) || 20 })
-    this.sessionId = options.sessionId
-    this.lastReportTime = 0
-    this.yardMapData = null
-    this.routePoints = []
-    this.routeLaneOffset = false
-    this.targetPoint = null
+    this.sessionId = options.sessionId // 这一趟编号
+    this.lastReportTime = 0 // 上次上报时间
+    this.yardMapData = null // 堆场道路、箱区
+    this.routePoints = [] // 规划折线
+    this.routeLaneOffset = false // 路线是否已按车道偏过
+    this.targetPoint = null // 目的地场图坐标
     // self 是场区米制坐标（后端 selfPoint），gps 是原始定位，只用于上报
     this.self = null
     this.gps = null
     this.scene = null
     this.locationListener = location => this.handleLocation(location)
-    this.compassHeading = null
+    this.compassHeading = null // 指南针朝向
     this.offHeading = headingSensor.onChange((deg, from) => this.handleCompass({ direction: deg, from }))
-    this.ended = false
-    this._spokenSessionId = null
-    this._spokenDestKey = null
+    this.ended = false // 结束后不再上报
+    this._spokenSessionId = null // 已经播过目的地的会话
+    this._spokenDestKey = null // 目的地+用途变了才重播「前往某某」
+    this.liveForklifts = {} // forkliftId -> 场区点
+    this._spokenSpeedRoad = null // 已经播过限速的路+限速
+    this.yardWs = null
+    this.truckDragEnabled = false // 只认数据字典 nav_truck_drag，页面上不出现开关
     voice.resetPhase()
     this.initScene().then(() => this.loadSession())
   },
@@ -203,12 +228,14 @@ Page({
     headingSensor.start()
   },
 
+  /** 离开页：停定位、停语音、拆场图 */
   onUnload() {
     this.ended = true
     this.stopLocationUpdates()
     if (this.offHeading) this.offHeading()
     headingSensor.stop()
     voice.resetPhase()
+    this.closeYardSocket()
     if (this.scene) {
       this.scene.dispose()
       this.scene = null
@@ -238,7 +265,7 @@ Page({
           try {
             this.scene = yardScene.createYardScene(canvas, item.width, item.height, dpr)
             if (this.scene.setFlatMode) {
-              this.scene.setFlatMode(true)
+              this.scene.setFlatMode(true) // 进页先俯视，好认路
               this.setData({ flatMode: true })
             }
           } catch (error) {
@@ -257,7 +284,7 @@ Page({
     if (!this.scene) return
     const opts = options || {}
     if (opts.rebuildMap && this.yardMapData) {
-      this.scene.setMap(this.yardMapData)
+      this.scene.setMap(this.yardMapData) // 只在拉到新场图时重建
     }
     this.scene.setTarget(
       this.targetPoint,
@@ -273,14 +300,14 @@ Page({
     }
     if (this.self) this.scene.setSelf(this.self)
     const status = this.scene.getStatus()
-    const off = status.offYardMeters
+    const off = status.offYardMeters // 车在场外多少米
     const offYardHint = off === null || off <= 80
       ? ''
       : `当前定位在场外约 ${off >= 1000 ? (off / 1000).toFixed(1) + ' km' : Math.round(off) + ' m'}`
     const patch = {}
     if (offYardHint !== this.data.offYardHint) patch.offYardHint = offYardHint
     if (status.viewAdjusted !== this.data.viewAdjusted) patch.viewAdjusted = status.viewAdjusted
-    if (this.data.followMode && status.viewAdjusted) patch.followMode = false
+    if (this.data.followMode && status.viewAdjusted) patch.followMode = false // 手势挪过就退出跟车
     if (typeof status.flatMode === 'boolean' && status.flatMode !== this.data.flatMode) {
       patch.flatMode = status.flatMode
     }
@@ -294,14 +321,17 @@ Page({
     if (Object.keys(patch).length) this.setData(patch)
   },
 
+  /** 拉会话、场图，取一次定位后开始持续上报 */
   async loadSession() {
     try {
       const session = await request({ url: `/navigation/mobile/sessions/${this.sessionId}` })
       this.applySession(session)
       await this.loadYardMap(session.cyId)
       await this.primeLocation()
-      this._forceRerouteOnce = true
+      this._forceRerouteOnce = true // 第一次上报要求按最新位置重算
       this.startLocationUpdates()
+      this.loadFeatures()
+      this.startYardLocations(session.cyId)
       if (this.gps) {
         this.lastReportTime = 0
         await this.handleLocation(this.gps)
@@ -311,6 +341,7 @@ Page({
     }
   },
 
+  /** 出场导航时把固定道口锚点告诉场图 */
   async syncExitGateAnchor(yardId) {
     if (!this.scene || !this.scene.setExitGateAnchor || !yardId) return
     try {
@@ -328,6 +359,7 @@ Page({
     }
   },
 
+  /** 拉这个堆场的道路和箱区画到场图上 */
   async loadYardMap(cyId) {
     const user = auth.getUser() || {}
     const yardId = cyId || user.currentCyId
@@ -342,7 +374,7 @@ Page({
       this.syncScene({ rebuildMap: true })
       setTimeout(() => {
         if (this.scene && this.data.mapLoading) {
-          this.setData({ mapLoading: false })
+          this.setData({ mapLoading: false }) // 8 秒还没建完也先揭开，避免一直转圈
         }
       }, 8000)
     } catch (error) {
@@ -350,6 +382,7 @@ Page({
     }
   },
 
+  /** 后台返回新会话或新路线时，刷新蓝线、提示、语音，到了就跳确认页 */
   applySession(session) {
     const route = session.route
     const points = route && route.polyline ? route.polyline : this.routePoints
@@ -400,12 +433,12 @@ Page({
     )
     const destKey = `${sessionId}|${session.purpose || ''}|${targetName}`
     if (this._spokenDestKey !== destKey) {
-      voice.resetPhase()
+      voice.resetPhase() // 换了目的地，允许再播「前往某某」
       this._spokenDestKey = destKey
       this._spokenSessionId = sessionId
-      this.speak(targetName ? `前往${targetName}，${instruction}` : instruction)
+      this.speakNav(targetName ? `前往${targetName}，${instruction}` : instruction)
     } else {
-      this.speak(instruction)
+      this.speakNav(instruction)
     }
 
     const arrivalSuggestion = Boolean(session.arrivalSuggestion)
@@ -436,6 +469,7 @@ Page({
     }
   },
 
+  /** 这次上报没有新路线，只刷新提示和剩余 */
   applyLocationTick(response) {
     const targetName = (this.data.session && this.data.session.targetName) || ''
     this.syncScene()
@@ -444,7 +478,7 @@ Page({
       targetName,
       response.nextInstruction || this.data.instruction
     )
-    this.speak(instruction)
+    this.speakNav(instruction)
     const remainM = pickRemainingMeters(this, this.data.session, null)
     const patch = {
       instruction,
@@ -469,6 +503,27 @@ Page({
     voice.speak(text, this.data.voiceOn)
   },
 
+  currentRoad() {
+    return yardScene.nearestRoad(this.yardMapData && this.yardMapData.roads, this.self)
+  },
+
+  /** 换路时补一句限速，和转向提示拼成一句，避免两句互相打断 */
+  speakNav(instruction) {
+    const road = this.currentRoad()
+    const kmh = road && road.speedLimitKmh ? Math.round(Number(road.speedLimitKmh)) : 0
+    const roadName = displayAreaText((road && (road.edgeName || road.roadName)) || '当前路段')
+    const roadKey = (road && (road.edgeCode || road.edgeName || road.roadName)) || ''
+    const speedKey = kmh > 0 ? `${roadKey}|${kmh}` : ''
+    if (speedKey && this._spokenSpeedRoad !== speedKey) {
+      this._spokenSpeedRoad = speedKey
+      const limit = `进入${roadName}，该道路限速${kmh}公里每小时，注意减速慢行`
+      this.speak(instruction ? `${instruction}。${limit}` : limit)
+      return
+    }
+    if (instruction) this.speak(instruction)
+  },
+
+  /** 开关语音；重新打开时当前这句再播一次 */
   toggleVoice() {
     const voiceOn = !this.data.voiceOn
     this.setData({ voiceOn })
@@ -478,9 +533,11 @@ Page({
     }
     // 重新打开时允许再播当前阶段一次
     voice.resetPhase()
-    this.speak(this.data.instruction)
+    this._spokenSpeedRoad = null
+    this.speakNav(this.data.instruction)
   },
 
+  /** 切换跟车 / 全场 */
   toggleFollow() {
     if (!this.scene) return
     const followMode = !this.data.followMode
@@ -494,12 +551,72 @@ Page({
     this.syncScene()
   },
 
+  /** 点「校准朝向」：要用户手势才能开传感器的机型在这里打开，并按指南针对齐 */
   calibrateHeading() {
     if (headingSensor.startFromTap) headingSensor.startFromTap()
     else headingSensor.start({ force: true, fromTap: true })
     if (headingSensor.calibrate) headingSensor.calibrate()
   },
 
+  /** 只读数据字典，页面上不露出任何开关 */
+  async loadFeatures() {
+    try {
+      const features = await request({ url: '/navigation/mobile/features' })
+      this.truckDragEnabled = Boolean(features && features.truckDragEnabled)
+    } catch (error) {
+      this.truckDragEnabled = false
+    }
+  },
+
+  /** 拉堆高机快照并听 WS 实时位置 */
+  async startYardLocations(cyId) {
+    const user = auth.getUser() || {}
+    const yardId = cyId || user.currentCyId
+    if (!yardId) return
+    try {
+      const rows = await request({ url: `/navigation/mobile/yards/${yardId}/forklifts` })
+      ;(rows || []).forEach(item => this.applyLiveForklift(item, yardId))
+      this.syncLiveForklifts()
+    } catch (error) {
+      console.warn('[nav-forklift] snapshot fail', error && error.message)
+    }
+    this.closeYardSocket()
+    this.yardWs = yardSocket.createYardSocket({
+      cyId: yardId,
+      onGpsLocation: payload => this.applyLiveForklift(payload, yardId)
+    })
+    this.yardWs.open()
+  },
+
+  closeYardSocket() {
+    if (this.yardWs) {
+      this.yardWs.close()
+      this.yardWs = null
+    }
+  },
+
+  applyLiveForklift(payload, yardId) {
+    if (!payload || payload.forkliftId == null) return
+    if (payload.sceneX == null || payload.sceneY == null) return
+    if (payload.cyId != null && yardId != null && String(payload.cyId) !== String(yardId)) return
+    this.liveForklifts[String(payload.forkliftId)] = {
+      id: String(payload.forkliftId),
+      code: payload.forkliftCode || '',
+      name: payload.forkliftName || payload.forkliftCode || '',
+      x: Number(payload.sceneX),
+      y: Number(payload.sceneY),
+      heading: payload.direction == null ? undefined : Number(payload.direction)
+    }
+    this.syncLiveForklifts()
+  },
+
+  syncLiveForklifts() {
+    if (!this.scene || !this.scene.setLiveForklifts) return
+    const items = Object.keys(this.liveForklifts).map(id => this.liveForklifts[id])
+    this.scene.setLiveForklifts(items)
+  },
+
+  /** 手指按下：第一次顺便校准朝向，并记下拖/捏起点 */
   onCanvasTouchStart(event) {
     if (!this._headingTapped) {
       this._headingTapped = true
@@ -507,6 +624,8 @@ Page({
     }
     const touches = event.touches || []
     this.gestureMode = null
+    this.truckGrabbed = false
+    this.dragging = false
     if (touches.length >= 2) {
       this.pinchDistance = touchDistance(touches)
       this.pinchMid = touchMidpoint(touches)
@@ -517,9 +636,18 @@ Page({
       this.pinchDistance = 0
       this.pinchMid = null
       this.pinchAngle = null
+      if (this.truckDragEnabled && this.isTouchOnTruck(touches[0])) {
+        this.truckGrabbed = true
+        this.dragLastYard = this.self ? { x: this.self.x, y: this.self.y } : null
+        this.dragGrabYard = this.scene && this.scene.screenToYard
+          ? this.scene.screenToYard(touches[0].x, touches[0].y)
+          : null
+        this.dragSelfAtGrab = this.self ? { x: this.self.x, y: this.self.y } : null
+      }
     }
   },
 
+  /** 手指移动：双指缩放/旋转/俯仰，单指拖场图 */
   onCanvasTouchMove(event) {
     if (!this.scene) return
     const touches = event.touches || []
@@ -594,6 +722,21 @@ Page({
       this.pinchMid = mid
       this.pinchAngle = angle
       this.panLast = null
+      this.truckGrabbed = false
+      return
+    }
+
+    if (this.truckDragEnabled && this.truckGrabbed && touches.length === 1) {
+      const start = this.panLast || touches[0]
+      const moved = Math.hypot(touches[0].x - start.x, touches[0].y - start.y)
+      if (!this.dragging && moved < 6) return
+      if (!this.dragging) {
+        this.dragging = true
+        this.gestureMode = 'truck'
+        if (this.scene.freezeView) this.scene.freezeView()
+        this.setData({ followMode: false, viewAdjusted: true })
+      }
+      this.moveTruckByGrab(touches[0])
       return
     }
 
@@ -610,11 +753,122 @@ Page({
   },
 
   onCanvasTouchEnd() {
+    const shouldReport = this.truckDragEnabled && this.dragging && this.self
     this.panLast = null
     this.pinchDistance = 0
     this.pinchMid = null
     this.pinchAngle = null
     this.gestureMode = null
+    this.dragging = false
+    this.truckGrabbed = false
+    this.dragGrabYard = null
+    this.dragSelfAtGrab = null
+    if (shouldReport) this.reportDragLocation()
+  },
+
+  /** 手指是否按在本车上：屏幕 64px 内，或场区 16 米内 */
+  isTouchOnTruck(touch) {
+    if (!this.scene || !this.self || touch == null || this.self.x == null) return false
+    if (this.scene.yardToScreen) {
+      const screen = this.scene.yardToScreen(this.self.x, this.self.y)
+      if (screen && Math.hypot(touch.x - screen.x, touch.y - screen.y) <= 64) return true
+    }
+    if (!this.scene.screenToYard) return false
+    const yard = this.scene.screenToYard(touch.x, touch.y)
+    if (!yard) return false
+    return Math.hypot(yard.x - this.self.x, yard.y - this.self.y) <= 16
+  },
+
+  /** 按住车上再拖：车跟着位移走，不瞬移到指尖 */
+  moveTruckByGrab(touch) {
+    if (!this.scene || !this.scene.screenToYard || !touch) return
+    const yard = this.scene.screenToYard(touch.x, touch.y)
+    if (!yard || yard.x == null || yard.y == null) return
+    let nextX = yard.x
+    let nextY = yard.y
+    if (this.dragGrabYard && this.dragSelfAtGrab) {
+      nextX = this.dragSelfAtGrab.x + (yard.x - this.dragGrabYard.x)
+      nextY = this.dragSelfAtGrab.y + (yard.y - this.dragGrabYard.y)
+    }
+    let heading = this.self && this.self.heading
+    if (this.dragLastYard) {
+      const dx = nextX - this.dragLastYard.x
+      const dy = nextY - this.dragLastYard.y
+      if (Math.hypot(dx, dy) > 0.4) {
+        heading = Math.atan2(dx, -dy) * 180 / Math.PI
+        if (heading < 0) heading += 360
+      }
+    }
+    this.dragLastYard = { x: nextX, y: nextY }
+    this.self = {
+      ...(this.self || {}),
+      x: nextX,
+      y: nextY,
+      heading,
+      accuracy: 5,
+      speed: 0
+    }
+    if (this.scene.setSelfImmediate) this.scene.setSelfImmediate(this.self, { skipRoute: true })
+    else this.scene.setSelf(this.self)
+  },
+
+  moveTruckByTouch(touch) {
+    if (!this.scene || !this.scene.screenToYard || !touch) return
+    const yard = this.scene.screenToYard(touch.x, touch.y)
+    if (!yard || yard.x == null || yard.y == null) return
+    let heading = this.self && this.self.heading
+    if (this.dragLastYard) {
+      const dx = yard.x - this.dragLastYard.x
+      const dy = yard.y - this.dragLastYard.y
+      if (Math.hypot(dx, dy) > 0.4) {
+        heading = Math.atan2(dx, -dy) * 180 / Math.PI
+        if (heading < 0) heading += 360
+      }
+    }
+    this.dragLastYard = { x: yard.x, y: yard.y }
+    this.self = {
+      ...(this.self || {}),
+      x: yard.x,
+      y: yard.y,
+      heading,
+      accuracy: 5,
+      speed: 0
+    }
+    if (this.scene.setSelfImmediate) this.scene.setSelfImmediate(this.self, { skipRoute: true })
+    else this.scene.setSelf(this.self)
+  },
+
+  async reportDragLocation() {
+    if (!this.self || this.ended || this.reporting) return
+    this.reporting = true
+    try {
+      const roads = this.yardMapData && this.yardMapData.roads
+      const onRoad = roads && roads.length
+        ? yardScene.snapPositionToRoad(roads, this.self.x, this.self.y)
+        : null
+      maybeForceRerouteIfRoadMismatch(this)
+      const response = await request({
+        url: `/navigation/mobile/sessions/${this.sessionId}/locations`,
+        method: 'POST',
+        data: locationUtil.toReport(this.gps || { accuracy: 5, speed: 0 }, this.self.heading, {
+          forceReroute: true,
+          dragTest: true,
+          sceneX: this.self.x,
+          sceneY: this.self.y,
+          snapEdgeCode: onRoad && onRoad.road && onRoad.road.edgeCode,
+          snapEdgeName: onRoad && onRoad.road && onRoad.road.name
+        })
+      })
+      if (this.ended) return
+      if (response.selfPoint) this.applySelfPoint(response.selfPoint, { immediate: true })
+      if (response.route) this.applySession(response)
+      else this.applyLocationTick(response)
+    } catch (error) {
+      if (this.ended || /已结束/.test(error.message || '')) return
+      wx.showToast({ title: error.message, icon: 'none' })
+    } finally {
+      this.reporting = false
+    }
   },
 
   zoomIn() {
@@ -629,6 +883,7 @@ Page({
     this.setData({ viewAdjusted: true, followMode: false })
   },
 
+  /** 俯视和斜视对调 */
   toggleFlatMode() {
     if (!this.scene) return
     const flatMode = !this.data.flatMode
@@ -636,6 +891,7 @@ Page({
     this.setData({ flatMode })
   },
 
+  /** 镜头回到跟车斜视 */
   resetView() {
     if (!this.scene) return
     this.scene.enableFollow()
@@ -643,6 +899,7 @@ Page({
     this.syncScene()
   },
 
+  /** 把镜头对准自己这辆车 */
   async locateSelf() {
     if (this.locating) return
     this.locating = true
@@ -668,6 +925,7 @@ Page({
     wx.navigateBack({ fail: () => wx.switchTab({ url: '/pages/home/index' }) })
   },
 
+  /** 进页先取一次点，场图上马上能画上车 */
   async primeLocation() {
     try {
       const location = await locationUtil.getCurrentLocation()
@@ -715,26 +973,33 @@ Page({
    *
    * 这里不再本地贴路：后端按路线前进方向靠右，再吸一次会把偏移拉回路中间。
    */
-  applySelfPoint(point) {
+  applySelfPoint(point, options) {
     if (!point || point.x == null || point.y == null) return
     const next = {
       ...(this.self || {}),
       x: Number(point.x),
       y: Number(point.y)
     }
-    // 弱定位下的小幅跳点不挪车，减轻「一直在抖」
-    if (this.self && this.self.x != null) {
-      const dist = Math.hypot(next.x - this.self.x, next.y - this.self.y)
-      const accuracy = next.accuracy || 50
-      if (dist < 1.2 || (accuracy > 35 && dist < 6)) {
-        next.x = this.self.x
-        next.y = this.self.y
+    // 弱定位下的小幅跳点不挪车，减轻「一直在抖」；拖拽松手后要立刻落到上报点
+    if (!options || !options.immediate) {
+      if (this.self && this.self.x != null) {
+        const dist = Math.hypot(next.x - this.self.x, next.y - this.self.y)
+        const accuracy = next.accuracy || 50
+        if (dist < 1.2 || (accuracy > 35 && dist < 6)) {
+          next.x = this.self.x
+          next.y = this.self.y
+        }
       }
     }
     this.self = next
+    if (options && options.immediate && this.scene && this.scene.setSelfImmediate) {
+      this.scene.setSelfImmediate(this.self)
+      return
+    }
     this.syncScene()
   },
 
+  /** 刷新定位好坏、限速、单行/逆行和当前提示 */
   refreshLocationUi(location) {
     const road = yardScene.nearestRoad(this.yardMapData && this.yardMapData.roads, this.self)
     const against = headingAgainstOneWay(this.self, road)
@@ -744,6 +1009,10 @@ Page({
       locationQuality: accuracy <= 30 ? '正常' : '较弱',
       locationQualityClass: accuracy <= 30 ? 'quality-good' : 'quality-weak',
       speedLimit: road && road.speedLimitKmh ? String(Math.round(road.speedLimitKmh)) : '',
+      overspeed: Boolean(road && road.speedLimitKmh && (() => {
+        const speed = location && location.speed != null ? location.speed : (this.self && this.self.speed)
+        return speed > 0 && (Number(speed) * 3.6) > Number(road.speedLimitKmh) + 0.5
+      })()),
       oneWayHint: against
         ? `${road.edgeName || '当前路段'}逆行`
         : (road && (road.directionType === 1 || road.directionType === 2)
@@ -761,7 +1030,9 @@ Page({
     if (instruction && instruction !== this.data.instruction) {
       patch.instruction = instruction
       patch.instructionIcon = instructionArrow(instruction)
-      this.speak(instruction)
+      this.speakNav(instruction)
+    } else {
+      this.speakNav('')
     }
     this.setData(patch)
   },
@@ -783,6 +1054,7 @@ Page({
     this.locationWatcher = null
   },
 
+  /** 指南针有新朝向：转车头，并偶尔转一下指南针圆盘 */
   handleCompass(res) {
     if (!res || res.direction == null) return
     this.compassHeading = res.direction
@@ -792,15 +1064,21 @@ Page({
     }
     if (this.scene && this.scene.setHeading) this.scene.setHeading(res.direction)
     const now = Date.now()
-    if (this._lastCompassUi && now - this._lastCompassUi < 400) return
+    if (this._lastCompassUi && now - this._lastCompassUi < 400) return // 圆盘不必每帧都刷
     this._lastCompassUi = now
     const status = this.scene && this.scene.getStatus ? this.scene.getStatus() : null
     const compassRotate = compassRotateOf(status)
     if (compassRotate !== this.data.compassRotate) this.setData({ compassRotate })
   },
 
+  /** 位置变了：刷新朝向，并按间隔把 GPS 报给后台 */
   async handleLocation(location) {
     if (this.ended) return
+    if (this.dragging) return
+    if (this.truckDragEnabled) {
+      this.applySelf(location)
+      return
+    }
     const now = Date.now()
     this.applySelf(location)
 
@@ -861,17 +1139,33 @@ Page({
     }
   },
 
+  /** 司机点「我已到达」：先问还剩多远，确认后再进到位页 */
   confirmArrival() {
     const purpose = (this.data.session && this.data.session.purpose) || 'job'
-    if (purpose === 'safety') {
-      wx.redirectTo({ url: `/pages/safety-zone/index?sessionId=${this.sessionId}` })
-      return
-    }
-    wx.redirectTo({
-      url: `/pages/arrive-confirm/index?sessionId=${this.sessionId}&targetName=${encodeURIComponent(this.data.session.targetName || '')}`
+    const name = (this.data.session && this.data.session.targetName) || '目的贝位'
+    const remain = Number(this.data.remainingDistance)
+    const remainText = Number.isFinite(remain) && remain > 0
+      ? `目前距离${name}还有约${Math.round(remain)}米，是否确认到达？`
+      : `是否确认已到达${name}？`
+    wx.showModal({
+      title: '确认到达',
+      content: remainText,
+      confirmText: '确认到达',
+      cancelText: '取消',
+      success: result => {
+        if (!result.confirm) return
+        if (purpose === 'safety') {
+          wx.redirectTo({ url: `/pages/safety-zone/index?sessionId=${this.sessionId}` })
+          return
+        }
+        wx.redirectTo({
+          url: `/pages/arrive-confirm/index?sessionId=${this.sessionId}&targetName=${encodeURIComponent(name)}`
+        })
+      }
     })
   },
 
+  /** 路上遇到封闭、找不到目标等，选一类报给后台 */
   reportException() {
     const items = ['道路封闭', '目标位置错误', '找不到目标', '定位信号弱', '其他问题']
     const types = ['ROAD_BLOCKED', 'TARGET_ERROR', 'TARGET_NOT_FOUND', 'LOCATION_WEAK', 'OTHER']
@@ -897,6 +1191,7 @@ Page({
     })
   },
 
+  /** 结束这一趟，停止上报并回首页 */
   cancelNavigation() {
     wx.showModal({
       title: '结束导航',

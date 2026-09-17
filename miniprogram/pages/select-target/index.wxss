@@ -1,3 +1,4 @@
+/* 页顶「按堆场 → 场区 → 贝位」提示 */
 .hint {
   margin: 4rpx 4rpx 20rpx;
   color: #53635b;
@@ -5,10 +6,12 @@
   font-weight: 600;
 }
 
+/* 三级选择那张白卡 */
 .selector-card {
   padding: 4rpx 32rpx;
 }
 
+/* 一行：左边步骤名，右边当前选中值 */
 .selector-row {
   display: flex;
   align-items: center;
@@ -16,11 +19,13 @@
   min-height: 116rpx;
 }
 
+/* 「1 堆场」这类标签 */
 .selector-label {
   font-size: 28rpx;
   font-weight: 600;
 }
 
+/* 步骤序号绿圆 */
 .step-number {
   display: inline-block;
   width: 42rpx;
@@ -34,6 +39,7 @@
   text-align: center;
 }
 
+/* 右边已选中的堆场/场区/贝位 */
 .picker-value {
   max-width: 390rpx;
   color: #18271f;
@@ -41,15 +47,18 @@
   text-align: right;
 }
 
+/* 还没选时的灰色占位 */
 .placeholder {
   color: #96a19b;
 }
 
+/* 三行之间的细线 */
 .divider {
   height: 1rpx;
   background: #edf1ef;
 }
 
+/* 底部「提空箱可反显贝位」说明 */
 .footer-tip {
   margin-top: 28rpx;
   color: #849089;

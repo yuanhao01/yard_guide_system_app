@@ -1,18 +1,24 @@
+<!-- 登录页整页：深绿顶栏一直铺到状态栏，下面是登录卡片 -->
 <view class="login-page">
-  <view class="hero">
+  <!-- 顶部深绿和系统名称，和状态栏同一块颜色，中间不再断一层 -->
+  <view class="hero" style="padding-top: {{statusBarHeight + 24}}px;">
     <view class="brand">
       <view class="brand-mark">场</view>
       <view class="brand-title">堆场引导系统</view>
+      <!-- 按司机/现场人员换一句说明 -->
       <view class="brand-subtitle">{{loginKind === 'driver' ? '集卡司机输入车牌并选择堆场即可进场' : '现场岗位使用电脑端账号登录'}}</view>
     </view>
   </view>
 
+  <!-- 白色登录卡片：切换身份、填表、提交 -->
   <view class="login-card">
+    <!-- 司机 / 现场人员两个页签 -->
     <view class="kind-tabs">
       <view class="kind-tab {{loginKind === 'driver' ? 'active' : ''}}" data-kind="driver" bindtap="switchKind">集卡司机</view>
       <view class="kind-tab {{loginKind === 'staff' ? 'active' : ''}}" data-kind="staff" bindtap="switchKind">现场人员</view>
     </view>
 
+    <!-- 司机：车牌 + 堆场 -->
     <block wx:if="{{loginKind === 'driver'}}">
       <view class="field-label">车牌号</view>
       <input class="field-input" maxlength="20" placeholder="例如 鲁A12345" value="{{plateNumber}}" bindinput="onPlateInput" />
@@ -20,11 +26,13 @@
       <picker mode="selector" range="{{yardNames}}" value="{{yardIndex >= 0 ? yardIndex : 0}}" bindchange="onYardChange" disabled="{{!yardNames.length}}">
         <view class="field-input picker-value {{yardName ? '' : 'placeholder'}}">{{yardName || (yardNames.length ? '请选择堆场' : '堆场列表为空')}}</view>
       </picker>
+      <!-- 堆场名单没拉下来时的原因 -->
       <view class="yards-error" wx:if="{{yardsLoadError}}">{{yardsLoadError}}</view>
       <button class="primary-button login-button" loading="{{submitting}}" disabled="{{submitting}}" bindtap="login">进入堆场</button>
-      <view class="login-tip">不用预先建账号，输入本次作业车牌并选择堆场即可</view>
+      <view class="login-tip">不用预先建账号，首次登录会自动出现在电脑端用户管理</view>
     </block>
 
+    <!-- 现场人员：账号 + 密码 -->
     <block wx:else>
       <view class="field-label">账号</view>
       <input class="field-input" maxlength="40" placeholder="请输入账号" value="{{userAccount}}" bindinput="onAccountInput" />
@@ -33,6 +41,7 @@
       <button class="primary-button login-button" loading="{{submitting}}" disabled="{{submitting}}" bindtap="login">登录</button>
       <view class="login-tip">道口、堆高机、调度账号由现场管理员在电脑端新增</view>
     </block>
+    <!-- 定位用途说明 -->
     <view class="privacy-tip">登录即表示同意仅在导航期间使用您的位置信息</view>
   </view>
 </view>

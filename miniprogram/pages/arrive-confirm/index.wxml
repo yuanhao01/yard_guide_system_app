@@ -1,3 +1,4 @@
+<!-- 到位确认：顶栏、已到达卡片、集卡小景、扫码确认 -->
 <view class="page arrive-page">
   <view class="hero" style="padding-top: {{statusBarHeight}}px;">
     <view class="hero-inner">
@@ -19,6 +20,7 @@
       </view>
     </view>
 
+    <!-- 三维小景：集卡停在车道上 -->
     <view class="scene-wrap">
       <canvas type="webgl" id="arriveCanvas" class="arrive-canvas"></canvas>
       <view class="scene-overlay" aria-hidden="true">
@@ -30,6 +32,7 @@
       </view>
     </view>
 
+    <!-- 到位时间、箱区校验、定位精度 -->
     <view class="meta">
       <view class="meta-item">
         <view class="meta-left">

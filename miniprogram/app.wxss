@@ -1,3 +1,4 @@
+/* 所有页面的底色、字色和字体，保证全小程序看起来是一套 */
 page {
   min-height: 100%;
   background: #f4f6f5;
@@ -5,12 +6,14 @@ page {
   font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif;
 }
 
+/* 多数业务页最外层留白，避免内容贴边 */
 .page {
   box-sizing: border-box;
   min-height: 100vh;
   padding: 32rpx;
 }
 
+/* 白底圆角卡片：首页、选贝位、个人中心等信息块都用它 */
 .card {
   margin-bottom: 24rpx;
   padding: 32rpx;
@@ -21,6 +24,7 @@ page {
 }
 
 /* 小程序原生 button 默认有上下内边距，和 line-height 叠在一起会把字顶偏下 */
+/* 绿色主按钮、浅绿次按钮、红色危险按钮共用的高度和居中 */
 .primary-button,
 .secondary-button,
 .danger-button {
@@ -36,31 +40,37 @@ page {
   box-sizing: border-box;
 }
 
+/* 去掉微信按钮自带的边框线，避免和我们画的圆角叠两层 */
 .primary-button::after,
 .secondary-button::after,
 .danger-button::after {
   border: none;
 }
 
+/* 绿色主操作按钮：登录、开始导航、确认等 */
 .primary-button {
   color: #ffffff;
   background: #147d55;
 }
 
+/* 浅绿次要按钮：返回、重新选择等不那么抢眼的操作 */
 .secondary-button {
   color: #147d55;
   background: #e8f4ee;
 }
 
+/* 红色危险按钮：退出登录等需要小心点的操作 */
 .danger-button {
   color: #b42318;
   background: #feeceb;
 }
 
+/* 灰色说明文字：提示、次要信息 */
 .muted {
   color: #718078;
 }
 
+/* 列表为空时的居中提示，告诉司机暂时没有内容 */
 .empty {
   padding: 80rpx 24rpx;
   color: #718078;

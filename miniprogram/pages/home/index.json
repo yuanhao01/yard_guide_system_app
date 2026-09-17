@@ -1,4 +1,8 @@
 {
-  "navigationBarTitleText": "堆场引导系统",
-  "enablePullDownRefresh": true
+  "navigationStyle": "custom",
+  "navigationBarTextStyle": "white",
+  "enablePullDownRefresh": true,
+  "backgroundColor": "#12372a",
+  "backgroundColorTop": "#12372a",
+  "backgroundColorBottom": "#f4f6f5"
 }

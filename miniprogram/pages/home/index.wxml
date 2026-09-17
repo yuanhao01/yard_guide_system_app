@@ -1,5 +1,8 @@
+<!-- 首页：顶部堆场/岗位，下面按身份显示协同群或选贝位 -->
 <view class="page home-page">
-  <view class="hero">
+  <!-- 顶部深绿从状态栏一直铺下来，中间不再断一层 -->
+  <view class="hero" style="padding-top: {{statusBarHeight + 8}}px;">
+    <view class="hero-brand">堆场引导系统</view>
     <view class="hero-top">
       <view>
         <view class="hero-label">{{isFieldRole ? (roleLabel || '现场岗位') : '当前堆场'}}</view>
@@ -16,11 +19,12 @@
     </view>
   </view>
 
+  <!-- 现场岗位：协同群列表 -->
   <block wx:if="{{isFieldRole}}">
     <view class="section-title">协同交流群</view>
     <view wx:if="{{!collabGroups.length}}" class="empty-card">
       <view class="empty-title">暂无进行中的协同任务</view>
-      <view class="empty-desc">司机开始导航后，系统会自动建群并把本岗位拉进去。下拉可刷新。</view>
+      <view class="empty-desc">司机开始导航后，系统会自动建群并把本场现场人员拉进去。下拉可刷新。</view>
     </view>
     <view
       wx:for="{{collabGroups}}"
@@ -29,19 +33,21 @@
       bindtap="openRoleGroup"
       data-id="{{item.id}}"
     >
+      <view class="collab-unread" wx:if="{{item.unreadCount > 0}}">{{item.unreadText}}</view>
       <view class="collab-head">
         <view class="collab-tag">任务协同</view>
-        <view class="collab-head-right">
-          <view class="collab-unread" wx:if="{{item.unreadCount > 0}}">{{item.unreadText}}</view>
-          <view class="collab-status">进行中</view>
-        </view>
+        <view class="collab-status">进行中</view>
       </view>
       <view class="collab-title">{{item.title}}</view>
       <view class="collab-desc">{{item.desc}}</view>
-      <view class="collab-members">{{item.memberText}}</view>
+      <view class="collab-foot">
+        <view class="collab-members">{{item.memberText}}</view>
+        <view class="collab-time" wx:if="{{item.lastMsgTimeText}}">{{item.lastMsgTimeText}}</view>
+      </view>
     </view>
   </block>
 
+  <!-- 司机：进行中任务、选贝位、扫码、协同群、安全提示 -->
   <block wx:else>
     <view wx:if="{{currentSession}}" class="current-card" bindtap="continueNavigation">
       <view class="current-tag">进行中</view>
@@ -55,7 +61,7 @@
       <view class="action-icon select-icon">选</view>
       <view class="action-content">
         <view class="action-title">手动选择贝位</view>
-        <view class="action-desc">按堆场、场区和贝位逐级选择</view>
+        <view class="action-desc">按场区和贝位选择目的地</view>
       </view>
       <view class="arrow">›</view>
     </view>
@@ -69,16 +75,17 @@
     </view>
 
     <view wx:if="{{collabGroup}}" class="collab-card" bindtap="openCollabGroup">
+      <view class="collab-unread" wx:if="{{collabGroup.unreadCount > 0}}">{{collabGroup.unreadText}}</view>
       <view class="collab-head">
         <view class="collab-tag">任务协同</view>
-        <view class="collab-head-right">
-          <view class="collab-unread" wx:if="{{collabGroup.unreadCount > 0}}">{{collabGroup.unreadText}}</view>
-          <view class="collab-status">进行中</view>
-        </view>
+        <view class="collab-status">进行中</view>
       </view>
       <view class="collab-title">{{collabGroup.title}}</view>
       <view class="collab-desc">{{collabGroup.desc}}</view>
-      <view class="collab-members">{{collabGroup.memberText}}</view>
+      <view class="collab-foot">
+        <view class="collab-members">{{collabGroup.memberText}}</view>
+        <view class="collab-time" wx:if="{{collabGroup.lastMsgTimeText}}">{{collabGroup.lastMsgTimeText}}</view>
+      </view>
     </view>
 
     <view class="safety-card">

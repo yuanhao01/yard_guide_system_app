@@ -7,7 +7,9 @@ page {
   background: #eef2f7;
 }
 
+/* 整页竖排：顶栏、聊天、输入 */
 .collab-page {
+  position: relative;
   display: flex;
   flex-direction: column;
   width: 100%;
@@ -16,11 +18,13 @@ page {
   background: #eef2f7;
 }
 
+/* 深蓝顶栏 */
 .header {
   color: #ffffff;
   background: linear-gradient(145deg, #0f2c50 0%, #1a4a7a 80%);
 }
 
+/* 返回、群名、在线人数横排 */
 .header-inner {
   display: flex;
   align-items: center;
@@ -28,6 +32,7 @@ page {
   padding: 12rpx 28rpx 28rpx;
 }
 
+/* 返回箭头 */
 .back {
   width: 56rpx;
   font-size: 52rpx;
@@ -35,22 +40,26 @@ page {
   line-height: 1;
 }
 
+/* 群名区域 */
 .heading {
   flex: 1;
   min-width: 0;
 }
 
+/* 「现场协同群」 */
 .title {
   font-size: 36rpx;
   font-weight: 700;
 }
 
+/* 任务名 */
 .sub {
   margin-top: 6rpx;
   color: rgba(255, 255, 255, 0.72);
   font-size: 22rpx;
 }
 
+/* 右上在线人数 */
 .online {
   display: flex;
   align-items: center;
@@ -58,6 +67,36 @@ page {
   font-size: 22rpx;
 }
 
+/* 群聊页右上角：往上翻时又来了新消息 */
+.header-unread {
+  min-width: 32rpx;
+  height: 32rpx;
+  margin-right: 10rpx;
+  padding: 0 8rpx;
+  border-radius: 16rpx;
+  background: #ff4d4f;
+  color: #ffffff;
+  font-size: 20rpx;
+  font-weight: 700;
+  line-height: 32rpx;
+  text-align: center;
+}
+
+/* 聊天区右侧「N条新消息」，点一下滚到底 */
+.new-msg-tip {
+  position: absolute;
+  right: 24rpx;
+  bottom: 220rpx;
+  z-index: 5;
+  padding: 10rpx 18rpx;
+  border-radius: 28rpx;
+  background: #147d55;
+  color: #ffffff;
+  font-size: 22rpx;
+  box-shadow: 0 8rpx 18rpx rgba(20, 125, 85, 0.28);
+}
+
+/* 在线绿点 */
 .online-dot {
   width: 12rpx;
   height: 12rpx;
@@ -66,10 +105,12 @@ page {
   background: #62e6a8;
 }
 
+/* 断线或群解散时灰点 */
 .online-dot.off {
   background: #94a3b8;
 }
 
+/* 加载中提示 */
 .tip {
   margin: 20rpx 28rpx 0;
   padding: 18rpx;
@@ -80,11 +121,13 @@ page {
   text-align: center;
 }
 
+/* 加载失败红条 */
 .tip.error {
   color: #b42318;
   background: #feeceb;
 }
 
+/* 系统通知胶囊 */
 .system-line {
   margin: 8rpx auto 12rpx;
   padding: 10rpx 22rpx;
@@ -96,16 +139,19 @@ page {
   align-self: center;
 }
 
+/* 自己发的文字气泡蓝底 */
 .bubble-mine {
   background: #1268e8;
   color: #ffffff;
 }
 
+/* 别人发的图片 */
 .image-bubble {
   margin-left: 80rpx;
   max-width: 420rpx;
 }
 
+/* 自己发的图片靠右 */
 .image-mine {
   margin-left: auto;
   margin-right: 0;
@@ -113,6 +159,7 @@ page {
   justify-content: flex-end;
 }
 
+/* 聊天图片 */
 .chat-image {
   display: block;
   width: 420rpx;
@@ -121,6 +168,7 @@ page {
   background: #e2e8f0;
 }
 
+/* 加号发图按钮 */
 .attach {
   display: flex;
   align-items: center;
@@ -136,15 +184,18 @@ page {
   line-height: 1;
 }
 
+/* 发送中或群解散时加号灰掉 */
 .attach.disabled {
   color: #94a3b8;
   background: #f1f5f9;
 }
 
+/* 发送中或群解散时发送按钮灰掉 */
 .send.disabled {
   background: #a8bdd8;
 }
 
+/* 中间聊天区域占满剩余高度 */
 .chat {
   flex: 1;
   min-height: 0;
@@ -152,16 +203,19 @@ page {
   box-sizing: border-box;
 }
 
+/* 一条消息的外边距 */
 .msg {
   margin-bottom: 28rpx;
 }
 
+/* 头像、姓名、时间 */
 .msg-meta {
   display: flex;
   align-items: center;
   margin-bottom: 12rpx;
 }
 
+/* 圆形头像 */
 .avatar {
   width: 64rpx;
   height: 64rpx;
@@ -173,18 +227,21 @@ page {
   text-align: center;
 }
 
+/* 司机灰、道口蓝、堆高机橙、调度青绿、系统浅灰 */
 .avatar.driver { background: #64748b; }
 .avatar.gate { background: #2563eb; }
 .avatar.stacker { background: #ea580c; }
 .avatar.dispatch { background: #0f766e; }
 .avatar.system { background: #94a3b8; }
 
+/* 姓名和岗位 */
 .msg-who {
   flex: 1;
   margin-left: 16rpx;
   min-width: 0;
 }
 
+/* 发送人姓名 */
 .name {
   display: block;
   color: #0f2c50;
@@ -192,16 +249,19 @@ page {
   font-weight: 700;
 }
 
+/* 岗位名 */
 .role {
   color: #64748b;
   font-size: 20rpx;
 }
 
+/* 发送时间 */
 .time {
   color: #94a3b8;
   font-size: 20rpx;
 }
 
+/* 别人的文字气泡 */
 .bubble {
   margin-left: 80rpx;
   padding: 20rpx 24rpx;
@@ -213,6 +273,7 @@ page {
   box-shadow: 0 4rpx 16rpx rgba(15, 44, 80, 0.06);
 }
 
+/* 堆高机动态卡片 */
 .machine-card {
   margin-left: 80rpx;
   padding: 24rpx;
@@ -222,12 +283,14 @@ page {
   box-shadow: 0 6rpx 18rpx rgba(234, 88, 12, 0.08);
 }
 
+/* 「堆高机动态」 */
 .machine-title {
   color: #c2410c;
   font-size: 22rpx;
   font-weight: 700;
 }
 
+/* 预计到达 */
 .machine-eta {
   margin-top: 10rpx;
   color: #0f2c50;
@@ -235,17 +298,20 @@ page {
   font-weight: 700;
 }
 
+/* 预计分钟橙色大数字 */
 .machine-num {
   color: #ea580c;
   font-size: 40rpx;
 }
 
+/* 路线说明 */
 .machine-route {
   margin-top: 8rpx;
   color: #64748b;
   font-size: 22rpx;
 }
 
+/* 作业状态胶囊 */
 .machine-status {
   display: inline-block;
   margin-top: 16rpx;
@@ -257,22 +323,26 @@ page {
   font-weight: 600;
 }
 
+/* 列表底部垫高，避免最后一条贴输入框 */
 .chat-pad {
   height: 24rpx;
 }
 
+/* 底部快捷回复和输入条 */
 .composer {
   padding: 16rpx 24rpx calc(16rpx + env(safe-area-inset-bottom));
   background: #ffffff;
   box-shadow: 0 -8rpx 24rpx rgba(15, 44, 80, 0.08);
 }
 
+/* 快捷回复四颗按钮 */
 .quick-row {
   display: flex;
   flex-wrap: wrap;
   gap: 12rpx;
 }
 
+/* 单颗快捷回复 */
 .quick {
   display: flex;
   align-items: center;
@@ -285,17 +355,20 @@ page {
   line-height: 1;
 }
 
+/* 四颗快捷回复的颜色 */
 .q-blue { color: #1d4ed8; background: #dbeafe; }
 .q-orange { color: #c2410c; background: #ffedd5; }
 .q-green { color: #047857; background: #d1fae5; }
 .q-cyan { color: #0e7490; background: #cffafe; }
 
+/* 加号、输入框、发送横排 */
 .input-row {
   display: flex;
   align-items: center;
   margin-top: 16rpx;
 }
 
+/* 输入框 */
 .input {
   flex: 1;
   height: 72rpx;
@@ -305,6 +378,7 @@ page {
   font-size: 26rpx;
 }
 
+/* 「发送」蓝按钮 */
 .send {
   display: flex;
   align-items: center;

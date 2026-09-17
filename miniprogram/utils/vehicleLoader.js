@@ -1,20 +1,23 @@
 /**
  * 读取 GLB（包内或远端），解析成与 Three 实例无关的网格数据，再实例化。
  * 微信小程序每个 webgl canvas 都有自己的 THREE，不能跨 canvas clone。
+ * 用来在场图上画出集卡、堆高机、箱子，到位页再画一小段车道小景。
+ * 依赖：config（远端高模地址）。
  */
 const config = require('../config.js')
 
 // 路径必须是源码里的字面量，微信 ignoreUploadUnusedFiles 才认，变量拼出来的 .glb 真机不会打进包
 const MODEL_FILES = {
-  truck: ['/models/truck.glb', 'models/truck.glb'],
-  stacker: ['/models/stacker.glb', 'models/stacker.glb'],
-  container20: ['/models/container20.glb', 'models/container20.glb'],
-  container40: ['/models/container40.glb', 'models/container40.glb'],
-  crossing: ['/models/crossing.glb', 'models/crossing.glb']
+  truck: ['/models/truck.glb', 'models/truck.glb'], // 集卡，两种路径兼容不同打包
+  stacker: ['/models/stacker.glb', 'models/stacker.glb'], // 堆高机
+  container20: ['/models/container20.glb', 'models/container20.glb'], // 20 尺箱
+  container40: ['/models/container40.glb', 'models/container40.glb'], // 40 尺箱
+  crossing: ['/models/crossing.glb', 'models/crossing.glb'] // 路口地面
 }
 
+/** 从安装包里读出某个模型的二进制，第一种路径失败再试第二种 */
 function readPackageBin(name) {
-  const candidates = MODEL_FILES[name]
+  const candidates = MODEL_FILES[name] // 这个模型登记的路径
   if (!candidates) return Promise.reject(new Error('未登记的模型 ' + name))
   return new Promise((resolve, reject) => {
     const tryRead = index => {
@@ -24,21 +27,23 @@ function readPackageBin(name) {
       }
       wx.getFileSystemManager().readFile({
         filePath: candidates[index],
-        success: res => resolve(res.data),
-        fail: () => tryRead(index + 1)
+        success: res => resolve(res.data), // 读到了就交给解析
+        fail: () => tryRead(index + 1) // 这条路径没有就试下一条
       })
     }
     tryRead(0)
   })
 }
 
+/** 把模型里的红绿蓝小数收成一个整数颜色，后面上色用 */
 function packColor(factor) {
-  const r = Math.round((factor[0] || 0) * 255)
-  const g = Math.round((factor[1] || 0) * 255)
-  const b = Math.round((factor[2] || 0) * 255)
+  const r = Math.round((factor[0] || 0) * 255) // 红
+  const g = Math.round((factor[1] || 0) * 255) // 绿
+  const b = Math.round((factor[2] || 0) * 255) // 蓝
   return (r << 16) | (g << 8) | b
 }
 
+/** 统一成 ArrayBuffer，微信读文件有时给的是带偏移的视图 */
 function asArrayBuffer(buffer) {
   if (buffer instanceof ArrayBuffer) return buffer
   if (buffer && buffer.buffer instanceof ArrayBuffer) {
@@ -47,6 +52,7 @@ function asArrayBuffer(buffer) {
   throw new Error('无法读取模型二进制')
 }
 
+/** 把模型文件头里的 UTF-8 字节读成文字（小程序不一定有 TextDecoder） */
 function decodeUtf8(bytes) {
   if (typeof TextDecoder !== 'undefined') {
     return new TextDecoder('utf-8').decode(bytes)
@@ -75,39 +81,40 @@ const COMPONENT = {
   5126: [Float32Array, 4]
 }
 
+/** 把一个 GLB 文件拆成可画的网格：顶点、法线、贴图、颜色 */
 function parseGlb(buffer) {
-  const data = asArrayBuffer(buffer)
+  const data = asArrayBuffer(buffer) // 整份文件
   const view = new DataView(data)
   if (view.getUint32(0, true) !== 0x46546c67) {
     throw new Error('不是有效的 GLB')
   }
-  const jsonLen = view.getUint32(12, true)
+  const jsonLen = view.getUint32(12, true) // 前面说明段有多长
   const jsonStart = 20
-  const jsonText = decodeUtf8(new Uint8Array(data, jsonStart, jsonLen))
+  const jsonText = decodeUtf8(new Uint8Array(data, jsonStart, jsonLen)) // 模型结构说明
   const gltf = JSON.parse(jsonText)
   let binOffset = jsonStart + jsonLen
-  if (binOffset % 4) binOffset += 4 - (binOffset % 4)
+  if (binOffset % 4) binOffset += 4 - (binOffset % 4) // 按 4 字节对齐
   const binLen = view.getUint32(binOffset, true)
   const binStart = binOffset + 8
-  const bin = data.slice(binStart, binStart + binLen)
+  const bin = data.slice(binStart, binStart + binLen) // 后面的顶点、贴图二进制
 
   /**
    * 读取访问器。Unity / Blender 导出的 glTF 常用交错缓冲（byteStride），
    * 按紧凑排列去切会把 UV 和法线读串，所以必须按 stride 逐元素取。
    */
   function accessorArray(index) {
-    const acc = gltf.accessors[index]
+    const acc = gltf.accessors[index] // 这一组顶点/法线/UV 的说明
     if (!acc) return null
-    const size = TYPE_SIZE[acc.type] || 1
-    const spec = COMPONENT[acc.componentType]
+    const size = TYPE_SIZE[acc.type] || 1 // 每个点几个数
+    const spec = COMPONENT[acc.componentType] // 每个数几个字节
     if (!spec) throw new Error('不支持的 componentType ' + acc.componentType)
     const Ctor = spec[0]
     const bytes = spec[1]
     const total = acc.count * size
     if (acc.bufferView == null) return new Ctor(total)
     const viewInfo = gltf.bufferViews[acc.bufferView] || {}
-    const base = (viewInfo.byteOffset || 0) + (acc.byteOffset || 0)
-    const stride = viewInfo.byteStride || 0
+    const base = (viewInfo.byteOffset || 0) + (acc.byteOffset || 0) // 从哪一段二进制开始
+    const stride = viewInfo.byteStride || 0 // 交错存放时每个点隔多远
     const packed = size * bytes
     if (!stride || stride === packed) {
       const aligned = new ArrayBuffer(total * bytes)
@@ -147,6 +154,7 @@ function parseGlb(buffer) {
     return { mime: image.mimeType || 'image/png', bytes: out }
   }
 
+  /** 取出一张贴图的字节和如何重复铺，用来给集卡/箱子上色 */
   function textureRef(info) {
     if (!info || info.index == null) return null
     const tex = (gltf.textures || [])[info.index]
@@ -155,20 +163,21 @@ function parseGlb(buffer) {
     if (!img) return null
     const sampler = (gltf.samplers || [])[tex.sampler] || {}
     return {
-      mime: img.mime,
-      bytes: img.bytes,
-      wrapS: sampler.wrapS || 10497,
-      wrapT: sampler.wrapT || 10497,
-      uv: info.texCoord || 0
+      mime: img.mime, // png 或 jpg
+      bytes: img.bytes, // 图片原文
+      wrapS: sampler.wrapS || 10497, // 横向怎么铺
+      wrapT: sampler.wrapT || 10497, // 纵向怎么铺
+      uv: info.texCoord || 0 // 用第几套 UV
     }
   }
 
   /* 节点变换：glTF 的顶点在节点局部空间，必须按场景层级烘焙到世界空间。
      顶点量化也靠它——位置存成归一化 int16，再用节点 scale/translation 还原。 */
 
+  /** 把一个零件的位移、旋转、缩放收成一张变换表，用来摆到正确位置 */
   function trsMatrix(node) {
-    if (node.matrix) return node.matrix
-    const t = node.translation || [0, 0, 0]
+    if (node.matrix) return node.matrix // 文件里已经给了整表就直接用
+    const t = node.translation || [0, 0, 0] // 位移
     const q = node.rotation || [0, 0, 0, 1]
     const s = node.scale || [1, 1, 1]
     const x = q[0], y = q[1], z = q[2], w = q[3]
@@ -184,6 +193,7 @@ function parseGlb(buffer) {
     ]
   }
 
+  /** 两张变换表相乘：子零件叠在父零件上 */
   function matMul(a, b) {
     const out = new Array(16)
     for (let c = 0; c < 4; c += 1) {
@@ -195,8 +205,9 @@ function parseGlb(buffer) {
     return out
   }
 
-  const IDENTITY = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]
+  const IDENTITY = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1] // 不移动、不旋转、不缩放
 
+  /** 这张表是不是「什么都没变」 */
   function isIdentity(m) {
     for (let i = 0; i < 16; i += 1) {
       if (Math.abs(m[i] - IDENTITY[i]) > 1e-9) return false
@@ -204,6 +215,7 @@ function parseGlb(buffer) {
     return true
   }
 
+  /** 按变换表把顶点和法线搬到堆场世界坐标，集卡零件才对得上 */
   function applyMatrix(m, positions, normals) {
     if (isIdentity(m)) return
     for (let i = 0; i < positions.length; i += 3) {
@@ -223,8 +235,9 @@ function parseGlb(buffer) {
     }
   }
 
-  const meshes = []
+  const meshes = [] // 拆出来的一块块网格，后面用来画车
 
+  /** 把模型里的一块零件（顶点、贴图、颜色）收进 meshes */
   function collectMesh(meshIndex, matrix) {
     const mesh = (gltf.meshes || [])[meshIndex]
     if (!mesh) return
@@ -251,25 +264,25 @@ function parseGlb(buffer) {
       const pbr = mat.pbrMetallicRoughness || {}
       const factor = pbr.baseColorFactor || [0.7, 0.7, 0.7, 1]
       meshes.push({
-        positions: new Float32Array(positions),
-        normals: normals ? new Float32Array(normals) : null,
-        uvs,
+        positions: new Float32Array(positions), // 顶点坐标
+        normals: normals ? new Float32Array(normals) : null, // 法线，用来受光
+        uvs, // 贴图坐标
         indices: indices
           ? (indices instanceof Uint16Array ? new Uint16Array(indices) : new Uint32Array(indices))
-          : null,
-        color: packColor(factor),
-        opacity: factor[3] != null ? factor[3] : 1,
+          : null, // 三角形怎么连
+        color: packColor(factor), // 底色
+        opacity: factor[3] != null ? factor[3] : 1, // 透明度
         // 与 obj_to_glb 一致：无 IBL 时默认金属度不能为 1，否则侧面死黑
         metalness: pbr.metallicFactor != null ? pbr.metallicFactor : 0.08,
         roughness: pbr.roughnessFactor != null ? pbr.roughnessFactor : 0.62,
         doubleSided: mat.doubleSided !== false,
         alphaMode: mat.alphaMode || 'OPAQUE',
         maps: {
-          base: textureRef(pbr.baseColorTexture),
-          metalRough: textureRef(pbr.metallicRoughnessTexture),
-          normal: textureRef(mat.normalTexture),
-          occlusion: textureRef(mat.occlusionTexture),
-          emissive: textureRef(mat.emissiveTexture)
+          base: textureRef(pbr.baseColorTexture), // 颜色贴图
+          metalRough: textureRef(pbr.metallicRoughnessTexture), // 金属/粗糙
+          normal: textureRef(mat.normalTexture), // 凹凸
+          occlusion: textureRef(mat.occlusionTexture), // 阴影遮挡
+          emissive: textureRef(mat.emissiveTexture) // 自发光
         },
         emissive: mat.emissiveFactor ? packColor(mat.emissiveFactor) : 0,
         normalScale: (mat.normalTexture && mat.normalTexture.scale != null)
@@ -281,9 +294,9 @@ function parseGlb(buffer) {
     })
   }
 
-  const scene = (gltf.scenes || [])[gltf.scene || 0]
+  const scene = (gltf.scenes || [])[gltf.scene || 0] // 文件里的主场景
   if (scene && scene.nodes && gltf.nodes) {
-    const walk = (nodeIndex, parent) => {
+    const walk = (nodeIndex, parent) => { // 按父子关系把零件摆到世界坐标
       const node = gltf.nodes[nodeIndex]
       if (!node) return
       const m = matMul(parent, trsMatrix(node))
@@ -298,7 +311,7 @@ function parseGlb(buffer) {
   return meshes
 }
 
-const cache = {}
+const cache = {} // 正在读或已经读完的包内模型，避免同一辆车读两遍
 
 /**
  * 模型只有 models/*.glb 一个来源。
@@ -311,8 +324,9 @@ function fallbackParts() {
 
 /** GLB 解析完成的高模，按名字缓存 */
 const loaded = {}
-const readyListeners = []
+const readyListeners = [] // 场图等模型好了再把低模换成高模
 
+/** 取出已经解析好的网格；还没有就空着，场图先不画这个物体 */
 function partsOf(name) {
   return loaded[name] || fallbackParts(name)
 }
@@ -327,12 +341,14 @@ function onModelReady(fn) {
   }
 }
 
+/** 告诉场图：这个名字的高模已经可以换上去了 */
 function notifyReady(name, parts) {
   readyListeners.forEach(fn => {
     try { fn(name, parts) } catch (error) { /* ignore */ }
   })
 }
 
+/** 先读包内低模保证场图不空，再去下远端高模 */
 function preload() {
   const local = Promise.all(
     Object.keys(MODEL_FILES).map(n => loadVehicleData(n).catch(() => null))
@@ -344,6 +360,7 @@ function preload() {
   })
 }
 
+/** 读并解析包内某个模型，解析完缓存起来给场图用 */
 function loadVehicleData(name) {
   if (loaded[name]) return Promise.resolve(loaded[name])
   if (!cache[name]) {
@@ -377,9 +394,10 @@ function loadVehicleData(name) {
 /* 服务端文件名拼成 <base>_v<version>.glb。
    版本号进文件名，新旧版本共存、CDN 可以长缓存；换模型时上传新文件并把 version 加一即可。 */
 const REMOTE_MODELS = {
-  truck: { base: 'truck_hd', version: 2 }
+  truck: { base: 'truck_hd', version: 2 } // 目前只下集卡高模，换模型时把 version 加一
 }
 
+/** 远端文件名：名字_版本.glb */
 function remoteFileOf(name) {
   const meta = REMOTE_MODELS[name]
   return `${meta.base}_v${meta.version}.glb`
@@ -388,20 +406,24 @@ function remoteFileOf(name) {
 /** 已由远端覆盖的模型，防止包内低模回头把它盖掉 */
 const remoteLoaded = {}
 
+/** 微信给这台手机划的本地目录，用来缓存下好的高模 */
 function userDataDir() {
   return (typeof wx !== 'undefined' && wx.env && wx.env.USER_DATA_PATH) || ''
 }
 
+/** 这台手机上这份高模该存在哪 */
 function cachePathOf(name) {
   return `${userDataDir()}/model_${name}_v${REMOTE_MODELS[name].version}.glb`
 }
 
+/** 从手机本地读已经缓存的高模 */
 function readLocalFile(fsm, filePath) {
   return new Promise((resolve, reject) => {
     fsm.readFile({ filePath, success: res => resolve(res.data), fail: reject })
   })
 }
 
+/** 从配置的地址下载高模，超时 60 秒 */
 function downloadRemote(name) {
   return new Promise((resolve, reject) => {
     wx.downloadFile({
@@ -431,6 +453,7 @@ function persist(fsm, tempFilePath, target) {
   })
 }
 
+/** 本地缓存 → 远端下载 → 失败就沿用包内低模 */
 function loadRemoteModel(name) {
   if (!REMOTE_MODELS[name] || !config.modelBaseUrl || !userDataDir()) {
     return Promise.resolve(null)
@@ -466,7 +489,7 @@ function sweepCache() {
   } catch (error) {
     return
   }
-  const keep = {}
+  const keep = {} // 当前版本该留下的文件名
   Object.keys(REMOTE_MODELS).forEach(n => {
     keep[`model_${n}_v${REMOTE_MODELS[n].version}.glb`] = true
   })
@@ -478,11 +501,13 @@ function sweepCache() {
   })
 }
 
+/** 清掉旧版缓存后再去拉远端高模 */
 function preloadRemote() {
   sweepCache()
   return Promise.all(Object.keys(REMOTE_MODELS).map(n => loadRemoteModel(n)))
 }
 
+/** 给几何体挂上一组顶点/法线/UV，兼容新旧 Three 接口 */
 function attachAttr(geo, name, attr) {
   if (typeof geo.setAttribute === 'function') {
     geo.setAttribute(name, attr)
@@ -502,6 +527,7 @@ const texFileCache = new Map()
 /** Texture 不能跨 canvas（每个 canvas 有自己的 THREE），按 THREE 实例分开存 */
 const texStore = typeof WeakMap === 'function' ? new WeakMap() : null
 
+/** 用文件长度和开头几个字节当钥匙，同一张贴图不写两遍 */
 function texKey(ref) {
   const len = ref.bytes.byteLength
   const head = new Uint8Array(ref.bytes, 0, Math.min(12, len))
@@ -510,6 +536,7 @@ function texKey(ref) {
   return len + '_' + sig
 }
 
+/** 把贴图字节落到手机临时文件，给 canvas.createImage 去读 */
 function writeTexFile(key, ref) {
   if (texFileCache.has(key)) return texFileCache.get(key)
   const ext = ref.mime === 'image/jpeg' ? 'jpg' : 'png'
@@ -525,12 +552,14 @@ function writeTexFile(key, ref) {
   }
 }
 
+/** 贴图铺不满时怎么重复：夹边、镜像、还是平铺 */
 function wrapMode(THREE, code) {
   if (code === 33071) return THREE.ClampToEdgeWrapping
   if (code === 33648) return THREE.MirroredRepeatWrapping
   return THREE.RepeatWrapping
 }
 
+/** 把 GLB 里的图片变成这块画布能用的贴图；同一张按画布复用 */
 function makeTexture(THREE, canvas, ref, srgb) {
   if (!ref || !ref.bytes || !canvas || typeof canvas.createImage !== 'function') return null
   let store = texStore && texStore.get(THREE)
@@ -675,6 +704,7 @@ function buildGeometry(THREE, part) {
   return geo
 }
 
+/** 三角形编号：点少用 16 位，点多用 32 位 */
 function toIndexAttr(THREE, raw) {
   if (raw instanceof Uint16Array || raw instanceof Uint32Array) {
     return new THREE.BufferAttribute(raw, 1)
@@ -687,6 +717,7 @@ function toIndexAttr(THREE, raw) {
   return new THREE.BufferAttribute(typed, 1)
 }
 
+/** 用解析好的网格在这块画布上真正拼出一辆车/一台堆高机 */
 function instantiate(THREE, parts, options) {
   if (!parts || !parts.length) {
     throw new Error('模型网格为空')
@@ -708,21 +739,22 @@ function instantiate(THREE, parts, options) {
   return group
 }
 
+/** 到位页小景：车道上停一辆集卡，或堆高机慢慢转一下 */
 function createVignette(canvas, width, height, dpr, THREE, parts, kind) {
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: false })
   renderer.setPixelRatio(dpr || 2)
   renderer.setSize(width, height, false)
-  renderer.setClearColor(kind === 'arrive' ? 0xdbe4ee : 0xfff4eb, 1)
+  renderer.setClearColor(kind === 'arrive' ? 0xdbe4ee : 0xfff4eb, 1) // 到位偏蓝灰，其它偏暖
   const scene = new THREE.Scene()
-  scene.add(new THREE.HemisphereLight(0xffffff, 0xb0b8c2, 1.05))
-  const sun = new THREE.DirectionalLight(0xfff4e6, 0.7)
+  scene.add(new THREE.HemisphereLight(0xffffff, 0xb0b8c2, 1.05)) // 天光
+  const sun = new THREE.DirectionalLight(0xfff4e6, 0.7) // 太阳
   sun.position.set(8, 16, 10)
   scene.add(sun)
   const camera = new THREE.PerspectiveCamera(38, width / height, 0.2, 80)
   const root = new THREE.Group()
   scene.add(root)
 
-  const ground = new THREE.Mesh(
+  const ground = new THREE.Mesh( // 地面
     new THREE.PlaneGeometry(28, 22),
     new THREE.MeshBasicMaterial({ color: kind === 'arrive' ? 0xe8edf2 : 0xf3e6d4 })
   )
@@ -730,38 +762,38 @@ function createVignette(canvas, width, height, dpr, THREE, parts, kind) {
   root.add(ground)
 
   if (kind === 'arrive') {
-    const lane = new THREE.Mesh(
+    const lane = new THREE.Mesh( // 中间车道
       new THREE.PlaneGeometry(7.4, 18),
       new THREE.MeshBasicMaterial({ color: 0xd5dce4 })
     )
     lane.rotation.x = -Math.PI / 2
     lane.position.y = 0.02
     root.add(lane)
-    const centerLine = new THREE.Mesh(
+    const centerLine = new THREE.Mesh( // 车道黄线
       new THREE.PlaneGeometry(0.18, 16),
       new THREE.MeshBasicMaterial({ color: 0xfacc15 })
     )
     centerLine.rotation.x = -Math.PI / 2
     centerLine.position.set(0, 0.03, 0)
     root.add(centerLine)
-    const highlight = new THREE.Mesh(
+    const highlight = new THREE.Mesh( // 停车位浅蓝高亮
       new THREE.PlaneGeometry(4.4, 12),
       new THREE.MeshBasicMaterial({ color: 0x2563eb, transparent: true, opacity: 0.12 })
     )
     highlight.rotation.x = -Math.PI / 2
-    highlight.position.set(-1.8, 0.04, 0)
+    highlight.position.set(0, 0.04, 1.2)
     root.add(highlight)
-    const truck = instantiate(THREE, parts.truck)
-    truck.position.set(-1.8, 0, 0.4)
+    const truck = instantiate(THREE, parts.truck) // 停在车道上的集卡
+    truck.position.set(0, 0, 1.6)
     truck.rotation.y = 0
-    truck.scale.setScalar(0.55)
+    truck.scale.setScalar(0.5)
     root.add(truck)
     if (parts.stacker && parts.stacker.length) {
       try {
-        const stacker = instantiate(THREE, parts.stacker)
-        stacker.position.set(3.8, 0, -1.2)
-        stacker.rotation.y = -Math.PI * 0.42
-        stacker.scale.setScalar(0.4)
+        const stacker = instantiate(THREE, parts.stacker) // 贝位前方作业的堆高机
+        stacker.position.set(0.2, 0, -5.2)
+        stacker.rotation.y = Math.PI
+        stacker.scale.setScalar(0.38)
         root.add(stacker)
       } catch (e) {
         // 堆高机模型未就绪时仅展示集卡
@@ -770,7 +802,7 @@ function createVignette(canvas, width, height, dpr, THREE, parts, kind) {
     ;[-6.6, 6.6].forEach(x => {
       for (let i = 0; i < 3; i += 1) {
         for (let t = 0; t < 3; t += 1) {
-          const box = new THREE.Mesh(
+          const box = new THREE.Mesh( // 两侧示意箱堆
             new THREE.BoxGeometry(2.44, 2.59, 6.06),
             new THREE.MeshBasicMaterial({ color: 0xe8edf2 })
           )
@@ -790,8 +822,8 @@ function createVignette(canvas, width, height, dpr, THREE, parts, kind) {
     camera.lookAt(0, 4.2, -0.8)
   }
 
-  let running = true
-  let spin = 0
+  let running = true // 页还在就继续画
+  let spin = 0 // 堆高机小景左右轻摇
   function loop() {
     if (!running) return
     canvas.requestAnimationFrame(loop)
@@ -804,12 +836,13 @@ function createVignette(canvas, width, height, dpr, THREE, parts, kind) {
   loop()
   return {
     dispose() {
-      running = false
+      running = false // 离开到位页停画
       renderer.dispose()
     }
   }
 }
 
+/** 堆场里成百上千个同色箱子，先做好一份几何模板再上色复用 */
 function createTemplate(THREE, parts) {
   if (!parts || !parts.length) return null
   return parts.map(part => ({
@@ -821,6 +854,7 @@ function createTemplate(THREE, parts) {
   }))
 }
 
+/** 用模板再变出一个箱子，车体零件按颜色复用材质 */
 function instantiateTemplate(THREE, template, tint, options) {
   if (!template) return null
   const opts = options || {}
@@ -851,26 +885,26 @@ function instantiateTemplate(THREE, template, tint, options) {
 }
 
 module.exports = {
-  parseGlb,
-  loadVehicleData,
-  preload,
-  onModelReady,
+  parseGlb, // 拆 GLB
+  loadVehicleData, // 读包内模型
+  preload, // 进导航前先热身
+  onModelReady, // 高模好了通知场图
   getTruckParts() {
-    return partsOf('truck')
+    return partsOf('truck') // 集卡网格
   },
   getStackerParts() {
-    return partsOf('stacker')
+    return partsOf('stacker') // 堆高机网格
   },
   getContainerParts(size) {
-    return partsOf(size === 20 ? 'container20' : 'container40')
+    return partsOf(size === 20 ? 'container20' : 'container40') // 20/40 尺箱
   },
   getCrossingParts() {
-    return partsOf('crossing')
+    return partsOf('crossing') // 路口
   },
-  instantiate,
-  createTemplate,
-  instantiateTemplate,
-  createVignette,
+  instantiate, // 在画布上拼出一辆
+  createTemplate, // 箱子模板
+  instantiateTemplate, // 按颜色复用箱子
+  createVignette, // 到位页小景
   loadPair() {
     return Promise.all([
       loadVehicleData('truck'),
@@ -878,10 +912,10 @@ module.exports = {
       loadVehicleData('container20'),
       loadVehicleData('container40')
     ]).then(pair => ({
-      truck: pair[0],
-      stacker: pair[1],
-      container20: pair[2],
-      container40: pair[3]
+      truck: pair[0], // 集卡
+      stacker: pair[1], // 堆高机
+      container20: pair[2], // 20 尺箱
+      container40: pair[3] // 40 尺箱
     }))
   }
 }

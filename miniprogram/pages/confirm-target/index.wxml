@@ -1,3 +1,4 @@
+<!-- 作业任务确认：贝位、机械、作业类型、船公司、箱号，然后开始导航 -->
 <view class="page confirm-page" wx:if="{{target}}">
   <view class="hero">
     <view class="hero-title">作业任务确认</view>
@@ -8,6 +9,7 @@
     <view class="badge">手动选位</view>
     <view class="loc-name">{{target.targetName}}</view>
     <view class="loc-code">{{target.targetCode}}</view>
+    <!-- 好箱 / 作业类型 / 箱型 标签 -->
     <view class="tag-row">
       <text class="tag tag-green">好箱</text>
       <text class="tag tag-green" wx:if="{{workTypeLabel}}">{{workTypeLabel}}</text>
@@ -20,7 +22,7 @@
         <view class="field-value">{{equipmentOptions[equipmentIndex]}} ›</view>
       </picker>
       <view wx:elif="{{!taskOptionsLoaded}}" class="field-value muted">正在读取堆场机械…</view>
-      <view wx:else class="field-value muted">暂无作业机械，请在管理端维护协同角色</view>
+      <view wx:else class="field-value muted">暂无作业机械，请在管理端叉车管理中维护</view>
     </view>
     <view class="field">
       <view class="field-label">作业类型</view>
@@ -34,9 +36,10 @@
         <view class="field-value">{{carrierOptions[carrierIndex]}} ›</view>
       </picker>
       <view wx:elif="{{!taskOptionsLoaded}}" class="field-value muted">正在读取在场船公司…</view>
-      <view wx:else class="field-value muted">暂无在场船公司，请同步在场箱数据</view>
+      <view wx:else class="field-value muted">暂无船公司，请在管理端基础资料中维护</view>
     </view>
 
+    <!-- 提空/提重才显示箱号，可反查贝位 -->
     <view class="field" wx:if="{{needCntrNo}}">
       <view class="field-label">箱号（可选）</view>
       <view class="cntr-row">
@@ -63,6 +66,7 @@
   <button class="start-btn" loading="{{starting}}" disabled="{{starting}}" bindtap="startNavigation">开始导航</button>
   <button class="secondary-button back-button" bindtap="goBack">重新选择箱区</button>
 
+  <!-- 底部三步进度：当前在第 1 步 -->
   <view class="steps">
     <view class="step active"><text class="n">1</text>任务确认</view>
     <view class="step-line"></view>

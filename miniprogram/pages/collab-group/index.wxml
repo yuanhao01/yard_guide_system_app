@@ -1,3 +1,4 @@
+<!-- 现场协同群：顶栏、聊天记录、快捷回复和输入 -->
 <view class="collab-page">
   <view class="header" style="padding-top: {{statusBarHeight}}px;">
     <view class="header-inner">
@@ -7,6 +8,7 @@
         <view class="sub">{{taskLabel || '作业任务'}}</view>
       </view>
       <view class="online">
+        <view class="header-unread" wx:if="{{pendingNewCount > 0}}">{{pendingNewText}}</view>
         <text class="online-dot {{dissolved || !connected ? 'off' : ''}}"></text>{{dissolved ? statusText : ((connected ? '' : '补拉 · ') + onlineCount + '/' + memberCount + '人在线')}}
       </view>
     </view>
@@ -15,7 +17,16 @@
   <view class="tip" wx:if="{{loading}}">协同群加载中…</view>
   <view class="tip error" wx:if="{{errorText}}">{{errorText}}</view>
 
-  <scroll-view class="chat" scroll-y scroll-into-view="{{scrollInto}}" scroll-with-animation>
+  <!-- 消息列表，新消息自动滚到底 -->
+  <scroll-view
+    class="chat"
+    scroll-y
+    scroll-into-view="{{scrollInto}}"
+    scroll-with-animation
+    lower-threshold="80"
+    bindscroll="onChatScroll"
+    bindscrolltolower="onChatToLower"
+  >
     <view class="msg {{item.self ? 'mine' : ''}}" wx:for="{{messages}}" wx:key="id" id="msg-{{item.id}}">
       <view wx:if="{{item.type === 'system'}}" class="system-line">{{item.text}}</view>
 
@@ -53,6 +64,10 @@
     </view>
     <view class="chat-pad"></view>
   </scroll-view>
+
+  <view class="new-msg-tip" wx:if="{{pendingNewCount > 0}}" bindtap="jumpToLatest">
+    {{pendingNewText}}条新消息
+  </view>
 
   <view class="composer">
     <view class="quick-row">

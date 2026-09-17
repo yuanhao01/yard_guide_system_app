@@ -1,3 +1,4 @@
+/* 盖掉通用页边距，验箱页贴边铺满 */
 page {
   width: 100%;
   height: 100%;
@@ -6,6 +7,7 @@ page {
   background: #eef2f7;
 }
 
+/* 整页竖排：顶栏、提示、场图、底部步骤 */
 .nav-page {
   display: flex;
   flex-direction: column;
@@ -15,11 +17,13 @@ page {
   background: #eef2f7;
 }
 
+/* 深蓝顶栏 */
 .nav-header {
   color: #fff;
   background: #0f2c50;
 }
 
+/* 返回和标题横排 */
 .nav-header-inner {
   display: flex;
   align-items: center;
@@ -27,23 +31,27 @@ page {
   padding: 8rpx 24rpx 20rpx;
 }
 
+/* 返回箭头 */
 .nav-back {
   width: 56rpx;
   font-size: 52rpx;
   font-weight: 300;
 }
 
+/* 「安全操作区」 */
 .nav-title {
   font-size: 36rpx;
   font-weight: 700;
 }
 
+/* 「提箱完成 · 请前往验箱」 */
 .nav-subtitle {
   margin-top: 4rpx;
   color: rgba(255, 255, 255, 0.72);
   font-size: 22rpx;
 }
 
+/* 转向提示蓝条 */
 .banner {
   display: flex;
   align-items: center;
@@ -54,16 +62,19 @@ page {
   background: #1268e8;
 }
 
+/* 提示条箭头 */
 .banner-arrow {
   margin-right: 16rpx;
   font-size: 44rpx;
 }
 
+/* 提示条文案 */
 .banner-text {
   font-size: 32rpx;
   font-weight: 700;
 }
 
+/* 中间场图 */
 .map-wrap {
   position: relative;
   flex: 1;
@@ -74,12 +85,14 @@ page {
   background: #d7dee6;
 }
 
+/* 左上跟车按钮 */
 .map-tools {
   position: absolute;
   top: 16rpx;
   left: 16rpx;
 }
 
+/* 跟车/全场小按钮 */
 .tool {
   width: 96rpx;
   padding: 12rpx 0;
@@ -91,21 +104,25 @@ page {
   text-align: center;
 }
 
+/* 跟车图标 */
 .tool-icon {
   font-size: 30rpx;
 }
 
+/* 跟车文字 */
 .tool-label {
   margin-top: 4rpx;
   line-height: 1.2;
 }
 
+/* 右下缩放列 */
 .map-zoom {
   position: absolute;
   right: 16rpx;
   bottom: 16rpx;
 }
 
+/* 2D/放大/缩小/复位 */
 .zoom-btn {
   width: 64rpx;
   height: 64rpx;
@@ -120,11 +137,13 @@ page {
   text-align: center;
 }
 
+/* 场图画布 */
 .yard-canvas {
   width: 100%;
   height: 100%;
 }
 
+/* 地图加载或失败提示 */
 .map-empty {
   position: absolute;
   inset: 0;
@@ -135,6 +154,7 @@ page {
   font-size: 24rpx;
 }
 
+/* 底部验箱步骤卡，可滚动 */
 .bottom-card {
   flex: 0 0 auto;
   max-height: 52vh;
@@ -145,6 +165,7 @@ page {
   background: #fff;
 }
 
+/* 「安全验箱步骤」 */
 .steps-title {
   margin-bottom: 16rpx;
   color: #0f2c50;
@@ -152,6 +173,7 @@ page {
   font-weight: 700;
 }
 
+/* 作业类型、机械、箱号那一排胶囊 */
 .task-meta {
   display: flex;
   flex-wrap: wrap;
@@ -159,6 +181,7 @@ page {
   margin-bottom: 20rpx;
 }
 
+/* 单个作业信息胶囊 */
 .task-meta text {
   padding: 6rpx 14rpx;
   border-radius: 999rpx;
@@ -168,6 +191,7 @@ page {
   font-weight: 600;
 }
 
+/* 验箱步骤一行 */
 .check-item {
   display: flex;
   align-items: center;
@@ -176,6 +200,7 @@ page {
   font-size: 28rpx;
 }
 
+/* 步骤序号蓝圆 */
 .check-item .n {
   display: inline-flex;
   align-items: center;
@@ -190,6 +215,7 @@ page {
   font-weight: 700;
 }
 
+/* 「确认安全后再下车」黄条 */
 .warn {
   margin: 20rpx 0;
   padding: 18rpx;
@@ -201,6 +227,7 @@ page {
   text-align: center;
 }
 
+/* 确认验箱 / 协同群 / 联系调度 共用高度 */
 .primary,
 .ghost {
   display: flex;
@@ -214,22 +241,26 @@ page {
   line-height: 1.2;
 }
 
+/* 去掉微信按钮边框 */
 .primary::after,
 .ghost::after {
   border: none;
 }
 
+/* 绿色「已停稳并完成验箱」 */
 .primary {
   color: #fff;
   background: #18a05a;
 }
 
+/* 浅蓝次要按钮 */
 .ghost {
   margin-top: 16rpx;
   color: #1268e8;
   background: #e8f1fc;
 }
 
+/* 「完成确认后进入出场导航」 */
 .foot {
   margin-top: 18rpx;
   color: #94a3b8;

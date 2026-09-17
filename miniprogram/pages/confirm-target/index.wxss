@@ -1,26 +1,31 @@
+/* 确认任务页浅灰底 */
 .confirm-page {
   padding: 0 0 48rpx;
   background: #eef2f7;
   min-height: 100vh;
 }
 
+/* 顶部深蓝标题区 */
 .hero {
   padding: 36rpx 40rpx 120rpx;
   color: #ffffff;
   background: linear-gradient(145deg, #0f2c50 0%, #1a4a7a 70%, #1268e8 140%);
 }
 
+/* 「作业任务确认」 */
 .hero-title {
   font-size: 44rpx;
   font-weight: 700;
 }
 
+/* 标题下的堆场名 */
 .hero-sub {
   margin-top: 10rpx;
   color: rgba(255, 255, 255, 0.72);
   font-size: 24rpx;
 }
 
+/* 上移压住蓝底的白色任务卡 */
 .task-card {
   position: relative;
   z-index: 1;
@@ -31,6 +36,7 @@
   box-shadow: 0 16rpx 40rpx rgba(15, 44, 80, 0.12);
 }
 
+/* 「手动选位」小标 */
 .badge {
   display: inline-block;
   padding: 6rpx 16rpx;
@@ -41,6 +47,7 @@
   font-weight: 600;
 }
 
+/* 贝位大名称 */
 .loc-name {
   margin-top: 18rpx;
   color: #0f2c50;
@@ -48,18 +55,21 @@
   font-weight: 700;
 }
 
+/* 贝位编码 */
 .loc-code {
   margin-top: 6rpx;
   color: #64748b;
   font-size: 24rpx;
 }
 
+/* 好箱 / 提空 / 箱型 标签行 */
 .tag-row {
   display: flex;
   gap: 12rpx;
   margin-top: 18rpx;
 }
 
+/* 单个标签 */
 .tag {
   padding: 6rpx 14rpx;
   border-radius: 8rpx;
@@ -67,27 +77,32 @@
   font-weight: 600;
 }
 
+/* 绿色标签：好箱、作业类型 */
 .tag-green {
   color: #147d55;
   background: #e6f4ed;
 }
 
+/* 蓝色标签：箱型 */
 .tag-blue {
   color: #1268e8;
   background: #e8f1fc;
 }
 
+/* 机械 / 作业类型 / 船公司 / 箱号 每一栏 */
 .field {
   margin-top: 28rpx;
   padding-top: 22rpx;
   border-top: 1rpx solid #eef2f6;
 }
 
+/* 栏目标题 */
 .field-label {
   color: #64748b;
   font-size: 22rpx;
 }
 
+/* 栏里当前选中的值 */
 .field-value {
   margin-top: 10rpx;
   color: #0f2c50;
@@ -95,11 +110,13 @@
   font-weight: 600;
 }
 
+/* 还在加载或没有数据时的灰字 */
 .field-value.muted {
   color: #94a3b8;
   font-weight: 400;
 }
 
+/* 箱号输入和「查询」横排 */
 .cntr-row {
   display: flex;
   align-items: center;
@@ -110,12 +127,14 @@
   background: #f8fafc;
 }
 
+/* 箱号输入框 */
 .cntr-input {
   flex: 1;
   height: 80rpx;
   font-size: 28rpx;
 }
 
+/* 「查询」二字 */
 .cntr-btn {
   padding: 0 22rpx;
   color: #1268e8;
@@ -123,16 +142,19 @@
   font-weight: 700;
 }
 
+/* 正在查询时灰掉 */
 .cntr-btn.disabled {
   color: #94a3b8;
 }
 
+/* 反查成功后的绿色贝位提示 */
 .cntr-hint {
   margin-top: 12rpx;
   color: #147d55;
   font-size: 23rpx;
 }
 
+/* 底部场区、贝位、到达半径三列 */
 .meta-row {
   display: flex;
   justify-content: space-between;
@@ -143,6 +165,7 @@
   color: #0f2c50;
 }
 
+/* 三列上面的小标题 */
 .meta-row text {
   display: block;
   margin-bottom: 6rpx;
@@ -150,6 +173,7 @@
   font-size: 20rpx;
 }
 
+/* 「车辆停稳后获取定位」绿条 */
 .ready-bar {
   margin-top: 28rpx;
   padding: 18rpx 20rpx;
@@ -160,6 +184,7 @@
   text-align: center;
 }
 
+/* 「开始导航」蓝按钮 */
 .start-btn {
   display: flex;
   align-items: center;
@@ -176,10 +201,12 @@
   box-sizing: border-box;
 }
 
+/* 去掉微信按钮默认边框 */
 .start-btn::after {
   border: none;
 }
 
+/* 「重新选择箱区」浅蓝按钮 */
 .back-button {
   display: flex;
   align-items: center;
@@ -191,6 +218,7 @@
   line-height: 1.2;
 }
 
+/* 底部三步进度条 */
 .steps {
   display: flex;
   align-items: center;
@@ -199,6 +227,7 @@
   padding: 0 40rpx;
 }
 
+/* 未走到的步骤灰字 */
 .step {
   display: flex;
   align-items: center;
@@ -206,11 +235,13 @@
   font-size: 22rpx;
 }
 
+/* 当前步骤蓝字 */
 .step.active {
   color: #1268e8;
   font-weight: 600;
 }
 
+/* 步骤序号圆 */
 .step .n {
   display: inline-flex;
   align-items: center;
@@ -223,11 +254,13 @@
   font-size: 20rpx;
 }
 
+/* 当前步骤序号实心蓝 */
 .step.active .n {
   color: #ffffff;
   background: #1268e8;
 }
 
+/* 步骤之间的短线 */
 .step-line {
   width: 48rpx;
   height: 2rpx;

@@ -1,3 +1,4 @@
+<!-- 安全操作区：顶栏、转向提示、场图、验箱步骤和确认 -->
 <view class="nav-page">
   <view class="nav-header" style="padding-top: {{statusBarHeight}}px;">
     <view class="nav-header-inner">
@@ -37,6 +38,7 @@
   </view>
 
   <view class="bottom-card">
+    <!-- 作业类型、机械、船公司、箱号 -->
     <view class="task-meta" wx:if="{{equipmentName || cntrNo || carrierCode}}">
       <text wx:if="{{workTypeLabel}}">{{workTypeLabel}}</text>
       <text wx:if="{{equipmentName}}">{{equipmentName}}</text>
