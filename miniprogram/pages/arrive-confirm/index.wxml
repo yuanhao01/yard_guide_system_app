@@ -30,6 +30,7 @@
         </view>
         <view class="parking-box"></view>
       </view>
+      <view class="scene-fallback" wx:if="{{sceneFailed}}">画面暂时加不出来，不影响确认到位</view>
     </view>
 
     <!-- 到位时间、箱区校验、定位精度 -->

@@ -28,7 +28,8 @@ Page({
     parkTip: '请听从机械手指挥停车', // 停车提示
     confirmBtnText: '确认到位', // 主按钮字
     confirming: false, // 正在提交确认
-    mapLoading: true // 小景还在加载
+    mapLoading: true, // 小景还在加载
+    sceneFailed: false // 小景绘制失败，用文字兜底
   },
 
   /** 进页：记下会话、时间，拉会话详情，再画集卡小景 */
@@ -99,37 +100,50 @@ Page({
   /** 在画布上画一辆集卡小景，给司机看「车已经停在贝位」 */
   async initScene() {
     return new Promise(resolve => {
-      wx.createSelectorQuery()
-        .select('#arriveCanvas')
-        .fields({ node: true, size: true })
-        .exec(async result => {
-          const item = result && result[0]
-          if (!item || !item.node) {
-            this.setData({ mapLoading: false })
-            resolve()
-            return
-          }
-          try {
-            const windowInfo = wx.getWindowInfo ? wx.getWindowInfo() : wx.getSystemInfoSync()
-            const dpr = Math.min((windowInfo && windowInfo.pixelRatio) || 2, 2.5) // 屏幕清晰度
-            const THREE = createScopedThreejs(item.node) // 这块画布自己的三维引擎
-            const parts = await vehicleLoader.loadPair() // 集卡、堆高机网格
-            this.vignette = vehicleLoader.createVignette(
-              item.node,
-              item.width,
-              item.height,
-              dpr,
-              THREE,
-              parts,
-              'arrive' // 到位场景：车道+集卡
-            )
-          } catch (error) {
-            console.warn('[arrive-confirm] vignette failed', error)
-          } finally {
-            this.setData({ mapLoading: false })
-            resolve()
-          }
-        })
+      const query = wx.createSelectorQuery()
+      query.select('#arriveCanvas').fields({ node: true, size: true })
+      // 有些机型这时候 canvas 节点自身的 size 还没结算出来（返回 0），
+      // 用外层容器的实际渲染尺寸兜底，避免拿 0 去初始化渲染器导致画面全空。
+      query.select('.scene-wrap').boundingClientRect()
+      query.exec(async result => {
+        const item = result && result[0]
+        const wrap = result && result[1]
+        if (!item || !item.node) {
+          console.warn('[arrive-confirm] canvas 节点未取到')
+          this.setData({ mapLoading: false })
+          resolve()
+          return
+        }
+        const width = item.width || (wrap && wrap.width) || 0
+        const height = item.height || (wrap && wrap.height) || 0
+        if (!width || !height) {
+          console.warn('[arrive-confirm] canvas 尺寸为 0，跳过小景绘制', width, height)
+          this.setData({ mapLoading: false })
+          resolve()
+          return
+        }
+        try {
+          const windowInfo = wx.getWindowInfo ? wx.getWindowInfo() : wx.getSystemInfoSync()
+          const dpr = Math.min((windowInfo && windowInfo.pixelRatio) || 2, 2.5) // 屏幕清晰度
+          const THREE = createScopedThreejs(item.node) // 这块画布自己的三维引擎
+          const parts = await vehicleLoader.loadPair() // 集卡、堆高机网格
+          this.vignette = vehicleLoader.createVignette(
+            item.node,
+            width,
+            height,
+            dpr,
+            THREE,
+            parts,
+            'arrive' // 到位场景：车道+集卡
+          )
+        } catch (error) {
+          console.warn('[arrive-confirm] vignette failed', error && (error.stack || error.message || error))
+          this.setData({ sceneFailed: true })
+        } finally {
+          this.setData({ mapLoading: false })
+          resolve()
+        }
+      })
     })
   },
 

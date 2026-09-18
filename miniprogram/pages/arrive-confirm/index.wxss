@@ -141,6 +141,19 @@
   pointer-events: none;
 }
 
+/* 小景画不出来时的兜底文字 */
+.scene-fallback {
+  position: absolute;
+  left: 50%;
+  bottom: 24rpx;
+  transform: translateX(-50%);
+  padding: 10rpx 20rpx;
+  border-radius: 10rpx;
+  color: #64748b;
+  background: rgba(255, 255, 255, 0.9);
+  font-size: 22rpx;
+}
+
 /* 「当前位置」气泡 */
 .scene-tag {
   position: absolute;
