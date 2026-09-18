@@ -8,8 +8,8 @@ module.exports = {
    * 开发者工具：详情 → 本地设置 → 勾选「不校验合法域名、web-view、TLS…」。
    * 真机调试：手机与电脑同一 Wi-Fi；Windows 防火墙放行 19207；后端需已启动且能连上 local 里的 MySQL/Redis。
    */
-  apiBaseUrl: 'http://10.196.1.137:19207/guide',
-  wsBaseUrl: 'ws://10.196.1.137:19207/guide',
+  apiBaseUrl: 'https://dct.hturing.com/guide',
+  wsBaseUrl: 'wss://dct.hturing.com/guide',
 
   /**
    * 高精度模型的下载地址。小程序主包上限 2MB，集卡高模单个就 1.5MB+，
@@ -21,7 +21,7 @@ module.exports = {
    * 正式发布改成 https 域名，并在公众平台配置 downloadFile 合法域名。
    * 置空则完全禁用远端模型，只用包内低模。
    */
-  modelBaseUrl: 'http://101.132.195.15/models',
+  modelBaseUrl: 'https://dct.hturing.com/models',
   // 导航页本地跟车已是 onLocationChange（约 1Hz）；这里是上报后端的间隔，对齐 WTRTK 1Hz
   locationReportIntervalMs: 1000,
 
@@ -57,5 +57,7 @@ module.exports = {
    * 测超速用 8（约 29km/h）；测「我已到达」请改成 0，否则后台认为车还在开。
    */
   // mockLocation: null
-  mockLocation: { longitude: 121.6812836, latitude: 31.3056040, direction: 90, speed: 8 } // 鑫三利 南路中段；speed 单位 m/s，8≈29km/h 用来测超速
+  // mockLocation: { longitude: 121.690964, latitude: 31.308906, direction: 90, speed: 8 } // 鑫三利 南路中段；speed 单位 m/s，8≈29km/h 用来测超速
+    mockLocation: { longitude: 121.6882218, latitude: 31.3044438, direction: 90, speed: 8 } // 鑫三利 南路中段；speed 单位 m/s，8≈29km/h 用来测超速
+
 }
