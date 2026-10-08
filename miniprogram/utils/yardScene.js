@@ -471,8 +471,9 @@ function createYardScene(canvas, width, height, dpr) {
   function shortBlockLabel(block) {
     const name = (block && block.blockName) || '' // 场区中文名
     const code = (block && block.blockCode) || '' // 场区代号 A/B/C
-    if (/[A-Za-z]区/.test(name)) return name.match(/[A-Za-z]区/)[0] // 名称里已有 A区
-    if (/[A-Za-z]座/.test(name)) return name.match(/[A-Za-z]座/)[0].replace('座', '区') // C座 → C区
+    // 区号可能是多位字母数字（GM区、LY区、A1区），不能只取一个字母，否则 GM区 会截成 M区
+    if (/[A-Za-z0-9]+区/.test(name)) return name.match(/[A-Za-z0-9]+区/)[0] // 名称里已有 A区
+    if (/[A-Za-z0-9]+座/.test(name)) return name.match(/[A-Za-z0-9]+座/)[0].replace('座', '区') // C座 → C区
     if (code) return `${code}区`
     return name.slice(0, 4) || '场区' // 实在没有就截名前 4 字
   }
@@ -958,18 +959,8 @@ function createYardScene(canvas, width, height, dpr) {
         ? { label: '#166534', deck: 0xc7ebd6, grid: 0x7a9a86 }
         : blockPalette(block) // 验箱区用淡绿地坪，其它区按代号配色
 
-      const cornerWorld = c => toWorld({ x: c[0], y: c[1] }, 0) // 角点转世界坐标
-      let psw = cornerWorld(corners.sw)
-      let pse = cornerWorld(corners.se)
-      let pnw = cornerWorld(corners.nw)
-      // 长边必须是贝、短边是排；若接口多边形对调了，这里把 u/v 拧回来
-      if (psw.distanceTo(pse) + 0.5 < psw.distanceTo(pnw)) {
-        corners.se = [polygon[3].x, polygon[3].y] // 交换东南/西北，把长边拧到贝向
-        corners.nw = [polygon[1].x, polygon[1].y]
-        psw = cornerWorld(corners.sw)
-        pse = cornerWorld(corners.se)
-        pnw = cornerWorld(corners.nw)
-      }
+      // 不按长短边猜贝向：后端多边形第 0→1 角就是 01 贝往后排的方向（已含旋转和长度正负），
+      // GM/LY 这种贝沿短边、从右往左排的区，猜长边会把贝画成上下走向
       const addDeckSpan = (u0, u1) => {
         if (u1 - u0 < 0.012) return
         const a = cornerAt(corners, u0, 0)
@@ -2220,6 +2211,18 @@ function createYardScene(canvas, width, height, dpr) {
     state.dirty = true
   }
 
+  /**
+   * 打开地图时的默认方位：场站东西长就转 90°，让长边沿竖屏上下铺开（屏幕上方朝东、北在左，
+   * 大门在西侧时正好落在底部）；南北长的场站仍北朝上。
+   */
+  function defaultBearing() {
+    const bounds = state.map ? yardBounds(state.map) : null
+    if (!bounds) return 0
+    const spanX = bounds.maxX - bounds.minX // 东西跨度
+    const spanY = bounds.maxY - bounds.minY // 南北跨度
+    return spanX > spanY * 1.15 ? -Math.PI / 2 : 0 // bearing=-90°：相机在西侧望东
+  }
+
   /** 自动算相机该看哪里：场外框整场，场内跟车看本车 */
   function computeAutoView() {
     const bounds = state.map ? yardBounds(state.map) : null
@@ -2340,7 +2343,9 @@ function createYardScene(canvas, width, height, dpr) {
 
   /** 页面传入新场图：存下来并异步重建场景 */
   function setMap(map) {
+    const firstMap = !state.map
     state.map = map
+    if (firstMap && !state.userView) state.view.bearing = defaultBearing() // 第一次进图按场站长边竖放
     rebuildMap()
     rebuildRoute()
     rebuildDynamic()
@@ -2446,9 +2451,10 @@ function createYardScene(canvas, width, height, dpr) {
   /** 主动回到跟车：清掉手动视角。 */
   function enableFollow() {
     state.followMode = true
-    state.headingUp = false // 回到默认北朝上的自动视野，不跟手机拧
+    state.headingUp = false // 回到默认方位的自动视野，不跟手机拧
     state.userView = null // 清掉手动视角
     state.view.pitch = DEFAULT_PITCH
+    state.view.bearing = defaultBearing() // 复位/跟车回到打开时的方位
     state.dirty = true
   }
 
@@ -2571,6 +2577,7 @@ function createYardScene(canvas, width, height, dpr) {
     state.userView = null
     state.headingUp = false
     state.view.pitch = FLAT_PITCH
+    state.view.bearing = defaultBearing()
     state.dirty = true
   }
 

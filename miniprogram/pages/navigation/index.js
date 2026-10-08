@@ -901,7 +901,8 @@ Page({
   resetView() {
     if (!this.scene) return
     this.scene.enableFollow()
-    this.setData({ viewAdjusted: false, followMode: true, flatMode: false, compassRotate: 0 })
+    // 复位回到打开时的方位（场站长边竖放），指南针按场景实际方位转，不能写死 0
+    this.setData({ viewAdjusted: false, followMode: true, flatMode: false })
     this.syncScene()
   },
 
