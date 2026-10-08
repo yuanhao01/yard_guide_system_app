@@ -314,35 +314,92 @@ function createYardScene(canvas, width, height, dpr) {
     }
   }
 
-  /** 单向路画路面箭头，不再画中心黄虚线。 */
-  function buildOneWayArrows(a, b, group) {
-    const len = a.distanceTo(b) // 路段长度
-    if (len < 5) return // 太短放不下箭头
-    const tangent = b.clone().sub(a) // 行驶方向向量
-    tangent.y = 0 // 只看地面方向
-    if (tangent.length() < 0.2) return // 退化段不画
-    tangent.normalize() // 变成单位方向
-    const angle = Math.atan2(tangent.x, tangent.z) // 箭头朝向
-    const side = new THREE.Vector3(-tangent.z, 0, tangent.x) // 垂直于前进方向的左右轴
-    let t = 3 // 从路段头空 3 米开始
-    while (t < len - 3) { // 尾部也留空
-      const p = a.clone().lerp(b, t / len) // 这一组箭头的中心
-      for (let s = -1; s <= 1; s += 2) { // 左右两翼合成一个 V 形箭头
-        const wing = makeBox(0.2, 0.05, 1.05, 0xf5f0d8) // 浅色细条当翼
-        wing.position.set(
-          p.x + side.x * s * 0.26 - tangent.x * 0.16, // 左右分开并略往后收
-          0.32, // 略高于路面
-          p.z + side.z * s * 0.26 - tangent.z * 0.16
-        )
-        wing.rotation.y = angle + s * 0.55 // 两翼向外撇开
-        ;(group || mapGroup).add(wing)
-      }
-      t += 8 // 每隔 8 米一组
-    }
+  /** 地面导向箭头：箭杆 + 三角箭头，平躺朝局部 +Z，长宽都归一到 1 米，靠 scale 放大 */
+  function makeLaneArrowGeometry() {
+    const shape = new THREE.Shape() // 形状平面里 x 左右、y 前进
+    shape.moveTo(-0.15, -0.5) // 箭杆尾巴左
+    shape.lineTo(0.15, -0.5) // 箭杆尾巴右
+    shape.lineTo(0.15, 0.2) // 箭杆右肩；箭头只占全长三成，拉长时不会变成细尖刺
+    shape.lineTo(0.5, 0.2) // 箭头右翼
+    shape.lineTo(0, 0.5) // 箭尖
+    shape.lineTo(-0.5, 0.2) // 箭头左翼
+    shape.lineTo(-0.15, 0.2) // 箭杆左肩
+    shape.closePath()
+    const geometry = new THREE.ShapeBufferGeometry(shape)
+    geometry.rotateX(Math.PI / 2) // 平躺到地面，形状 +Y 变成局部 +Z
+    return geometry
   }
 
-  /** 把场图道路画成三层路面 + 黄虚线或单向箭头 */
+  /** 沿整条路折线每隔 spacing 米取一个点和前进方向；离拐点不足 cornerGap 的不放，免得箭头压在路口上 */
+  function samplesAlongPath(points, spacing, startAt, cornerGap) {
+    const out = []
+    let next = startAt // 下一个箭头距折线起点多少米
+    let walked = 0 // 已走过的折线长度
+    for (let i = 0; i < points.length - 1; i += 1) {
+      const a = points[i]
+      const b = points[i + 1]
+      const len = a.distanceTo(b)
+      if (len < 1e-3) continue // 重合点跳过
+      while (next <= walked + len) {
+        const t = next - walked // 在本段上的位置
+        if (t >= cornerGap && len - t >= cornerGap) {
+          out.push({
+            p: a.clone().lerp(b, t / len),
+            tangent: b.clone().sub(a).setY(0).normalize()
+          })
+        }
+        next += spacing
+      }
+      walked += len
+    }
+    return out
+  }
+
+  /**
+   * 画车道行驶方向箭头（靠右行驶）：
+   * 单行路在路中间一列，全部朝规定方向；双向路左右两条车道各一列，方向相反。
+   */
+  function buildLaneArrows(points, widthM, dir, geometry, material) {
+    if (!points || points.length < 2) return
+    const twoWay = !(dir === 1 || dir === 2) // 0 或脏值都当双向
+    const laneW = twoWay ? widthM / 2 : widthM // 每条车道宽
+    const arrowW = Math.min(1.8, Math.max(0.9, laneW * 0.42)) // 箭头宽，窄路也要看得见
+    const arrowL = Math.min(8, Math.max(4.5, arrowW * 4.5)) // 箭头长，拉长一点更好认方向
+    const spacing = Math.max(36, arrowL * 6) // 同一车道两箭头间距，不必太密
+    const cornerGap = arrowL * 0.8 // 拐点前后留空
+    const reversed = points.slice().reverse()
+    const lanes = twoWay
+      ? [
+        { path: points, offset: laneW / 2 }, // 起点→终点方向，靠它的右侧
+        { path: reversed, offset: laneW / 2 } // 终点→起点方向，靠它的右侧
+      ]
+      : [{ path: dir === 2 ? reversed : points, offset: 0 }] // directionType=2 表示终点→起点
+    const total = polylineLength(points)
+    lanes.forEach(lane => {
+      let samples = samplesAlongPath(lane.path, spacing, spacing * 0.5, cornerGap)
+      if (!samples.length && total >= arrowL + 2) {
+        samples = samplesAlongPath(lane.path, Infinity, total / 2, arrowL * 0.6) // 短路至少放一个
+      }
+      samples.forEach(item => {
+        const right = rightOf(item.tangent) // 行驶方向右侧
+        const arrow = new THREE.Mesh(geometry, material)
+        arrow.scale.set(arrowW, 1, arrowL)
+        arrow.position.set(
+          item.p.x + right.x * lane.offset,
+          0.33, // 高过路面和黄虚线，避免闪面
+          item.p.z + right.z * lane.offset
+        )
+        arrow.rotation.y = Math.atan2(item.tangent.x, item.tangent.z) // 局部 +Z 转到行驶方向
+        mapGroup.add(arrow)
+      })
+    })
+  }
+
+  /** 把场图道路画成三层路面 + 黄虚线（双向）+ 各车道行驶方向箭头 */
   function buildRoads(roads) {
+    // 所有箭头共用一份几何和材质；双面材质保证俯视、斜视都看得见
+    const arrowGeometry = makeLaneArrowGeometry()
+    const arrowMaterial = new THREE.MeshBasicMaterial({ color: 0x111111, side: THREE.DoubleSide }) // 黑色，灰路面上更醒目
     ;(roads || []).forEach(road => { // 逐条路画
       const path = road.path || [] // 这条路的折线点
       // 场图维护的真实路宽；旧数据没有时才按限速粗估
@@ -362,17 +419,14 @@ function createYardScene(canvas, width, height, dpr) {
         buildRoadSegment(a, b, widthM + 0.9, 0xd9dee5, mapGroup, 0.2) // 浅灰牙边
         buildRoadSegment(a, b, widthM, 0x7a8490, mapGroup, 0.24) // 主路面
         if (twoWay) {
-          buildDashedCenterLine(a, b, mapGroup) // 双向画中心黄虚线
-        } else {
-          const from = dir === 2 ? b : a // directionType=2 表示反向走
-          const to = dir === 2 ? a : b
-          buildOneWayArrows(from, to, mapGroup) // 单向画地面箭头
+          buildDashedCenterLine(a, b, mapGroup) // 双向画中心黄虚线，分开对向车道
         }
       }
       points.forEach(p => { // 每个拐点盖两层接缝块
         buildRoadJoint(p, widthM + 2.2, 0x5f6874, 0.16)
         buildRoadJoint(p, widthM, 0x7a8490, 0.24)
       })
+      buildLaneArrows(points, widthM, dir, arrowGeometry, arrowMaterial) // 沿整条路画方向箭头
     })
   }
 

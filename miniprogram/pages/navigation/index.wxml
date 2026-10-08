@@ -78,8 +78,9 @@
       <view class="chip chip-warn">⚠ {{offYardHint}}，进入堆场后自动跟车</view>
     </view>
 
-    <view class="chips" wx:if="{{oneWayHint || speedLimit || overspeed}}">
+    <view class="chips" wx:if="{{oneWayHint || twoWayHint || speedLimit || overspeed}}">
       <view class="chip chip-warn" wx:if="{{oneWayHint}}">⚠ {{oneWayHint}}</view>
+      <view class="chip chip-info" wx:if="{{twoWayHint}}">⇅ {{twoWayHint}}</view>
       <view class="chip chip-danger" wx:if="{{speedLimit}}">
         <text class="chip-badge">{{speedLimit}}</text>限速 {{speedLimit}}
       </view>

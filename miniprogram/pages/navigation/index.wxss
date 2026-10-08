@@ -344,6 +344,12 @@
   background: #fdf3dd;
 }
 
+/* 蓝色说明：双向车道 */
+.chip-info {
+  color: #1d4f91;
+  background: #e8f0fb;
+}
+
 /* 红色限速 */
 .chip-danger {
   color: #b42318;

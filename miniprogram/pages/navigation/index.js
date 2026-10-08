@@ -187,6 +187,7 @@ Page({
     speedLimit: '', // 当前路限速
     overspeed: false, // 当前车速是否超过所在路限速
     oneWayHint: '', // 单行/逆行提示
+    twoWayHint: '', // 双向车道提示
     offYardHint: '', // 车在场外多远
     mapError: '', // 场图失败原因
     mapLoading: true, // 场图加载中
@@ -1021,8 +1022,12 @@ Page({
       oneWayHint: against
         ? `${road.edgeName || '当前路段'}逆行`
         : (road && (road.directionType === 1 || road.directionType === 2)
-          ? `${road.edgeName || '当前路段'}单向`
-          : '')
+          ? `${road.edgeName || '当前路段'}单行，按箭头方向行驶`
+          : ''),
+      // 双向路提示靠右走，和场图上左右车道反向箭头对应
+      twoWayHint: !against && road && road.directionType === 0
+        ? `${road.edgeName || '当前路段'}双向车道，靠右行驶`
+        : ''
     }
     if (remainM > 0.5) {
       const meters = Math.round(remainM)

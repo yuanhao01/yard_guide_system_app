@@ -8,8 +8,10 @@ module.exports = {
    * 开发者工具：详情 → 本地设置 → 勾选「不校验合法域名、web-view、TLS…」。
    * 真机调试：手机与电脑同一 Wi-Fi；Windows 防火墙放行 19207；后端需已启动且能连上 local 里的 MySQL/Redis。
    */
-  apiBaseUrl: 'https://dct.hturing.com/guide',
-  wsBaseUrl: 'wss://dct.hturing.com/guide',
+  // apiBaseUrl: 'https://dct.hturing.com/guide',
+  // wsBaseUrl: 'wss://dct.hturing.com/guide',
+  apiBaseUrl: 'http://10.196.1.137:19207/guide',
+  wsBaseUrl: 'wss://10.196.1.137:19207/guide',
 
   /**
    * 高精度模型的下载地址。小程序主包上限 2MB，集卡高模单个就 1.5MB+，
@@ -21,7 +23,8 @@ module.exports = {
    * 正式发布改成 https 域名，并在公众平台配置 downloadFile 合法域名。
    * 置空则完全禁用远端模型，只用包内低模。
    */
-  modelBaseUrl: 'https://dct.hturing.com/models',
+  // modelBaseUrl: 'https://dct.hturing.com/models',
+  modelBaseUrl: 'http://10.196.1.137:19207/models',
   // 导航页本地跟车已是 onLocationChange（约 1Hz）；这里是上报后端的间隔，对齐 WTRTK 1Hz
   locationReportIntervalMs: 1000,
 
