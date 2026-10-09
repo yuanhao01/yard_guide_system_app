@@ -179,15 +179,11 @@ Page({
     instructionIcon: '↑', // 提示条箭头
     remainingDistance: '--', // 剩余米数
     estimatedMinutes: '--', // 预计分钟
-    locationQuality: '等待定位', // 定位好不好
-    locationQualityClass: '', // 绿点/橙点
     arrivalSuggestion: false, // 后台认为到了
     voiceOn: true, // 语音开着
     followMode: true, // 镜头跟车
     speedLimit: '', // 当前路限速
-    overspeed: false, // 当前车速是否超过所在路限速
     oneWayHint: '', // 单行/逆行提示
-    twoWayHint: '', // 双向车道提示
     offYardHint: '', // 车在场外多远
     mapError: '', // 场图失败原因
     mapLoading: true, // 场图加载中
@@ -938,7 +934,7 @@ Page({
       const location = await locationUtil.getCurrentLocation()
       this.applySelf(location)
     } catch (error) {
-      this.setData({ locationQuality: '获取失败', locationQualityClass: 'quality-weak' })
+      // 首次取点失败不提示，等持续定位回调再画车
     }
   },
 
@@ -1006,29 +1002,18 @@ Page({
     this.syncScene()
   },
 
-  /** 刷新定位好坏、限速、单行/逆行和当前提示 */
+  /** 刷新限速、单行/逆行和当前提示 */
   refreshLocationUi(location) {
     const road = yardScene.nearestRoad(this.yardMapData && this.yardMapData.roads, this.self)
     const against = headingAgainstOneWay(this.self, road)
     const remainM = pickRemainingMeters(this, this.data.session, null)
-    const accuracy = (location && location.accuracy) || 99
     const patch = {
-      locationQuality: accuracy <= 30 ? '正常' : '较弱',
-      locationQualityClass: accuracy <= 30 ? 'quality-good' : 'quality-weak',
       speedLimit: road && road.speedLimitKmh ? String(Math.round(road.speedLimitKmh)) : '',
-      overspeed: Boolean(road && road.speedLimitKmh && (() => {
-        const speed = location && location.speed != null ? location.speed : (this.self && this.self.speed)
-        return speed > 0 && (Number(speed) * 3.6) > Number(road.speedLimitKmh) + 0.5
-      })()),
       oneWayHint: against
         ? `${road.edgeName || '当前路段'}逆行`
         : (road && (road.directionType === 1 || road.directionType === 2)
           ? `${road.edgeName || '当前路段'}单行，按箭头方向行驶`
-          : ''),
-      // 双向路提示靠右走，和场图上左右车道反向箭头对应
-      twoWayHint: !against && road && road.directionType === 0
-        ? `${road.edgeName || '当前路段'}双向车道，靠右行驶`
-        : ''
+          : '')
     }
     if (remainM > 0.5) {
       const meters = Math.round(remainM)
@@ -1176,36 +1161,10 @@ Page({
     })
   },
 
-  /** 路上遇到封闭、找不到目标等，选一类报给后台 */
-  reportException() {
-    const items = ['道路封闭', '目标位置错误', '找不到目标', '定位信号弱', '其他问题']
-    const types = ['ROAD_BLOCKED', 'TARGET_ERROR', 'TARGET_NOT_FOUND', 'LOCATION_WEAK', 'OTHER']
-    wx.showActionSheet({
-      itemList: items,
-      success: async result => {
-        try {
-          await request({
-            url: `/navigation/mobile/sessions/${this.sessionId}/exceptions`,
-            method: 'POST',
-            data: {
-              exceptionType: types[result.tapIndex],
-              description: items[result.tapIndex],
-              longitude: this.gps ? this.gps.longitude : undefined,
-              latitude: this.gps ? this.gps.latitude : undefined
-            }
-          })
-          wx.showToast({ title: '异常已上报', icon: 'success' })
-        } catch (error) {
-          wx.showToast({ title: error.message, icon: 'none' })
-        }
-      }
-    })
-  },
-
-  /** 结束这一趟，停止上报并回首页 */
+  /** 退出这一趟，停止上报并回首页 */
   cancelNavigation() {
     wx.showModal({
-      title: '结束导航',
+      title: '退出导航',
       content: '结束后将停止位置上报，确定继续吗？',
       confirmColor: '#b42318',
       success: async result => {

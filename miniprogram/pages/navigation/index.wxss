@@ -185,6 +185,24 @@
   bottom: 24rpx;
 }
 
+/* 右侧按钮栏顶上的限速牌：红圈白底黑字，和路边限速标志一样 */
+.speed-sign {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 72rpx;
+  height: 72rpx;
+  border: 8rpx solid #d0392b;
+  border-radius: 50%;
+  background: #ffffff;
+  box-shadow: 0 6rpx 20rpx rgba(15, 44, 80, 0.14);
+  color: #1a1a1a;
+  font-size: 30rpx;
+  font-weight: 800;
+  line-height: 1;
+  box-sizing: border-box;
+}
+
 /* 缩放列里的小方钮 */
 .zoom-btn {
   display: flex;
@@ -317,7 +335,7 @@
   font-weight: 500;
 }
 
-/* 场外、逆行、限速提示条外框 */
+/* 场外、逆行提示条外框 */
 .chips {
   display: flex;
   margin-top: 22rpx;
@@ -344,39 +362,20 @@
   background: #fdf3dd;
 }
 
-/* 蓝色说明：双向车道 */
-.chip-info {
-  color: #1d4f91;
-  background: #e8f0fb;
+/* 「我已到达」和「退出」并排一行 */
+.action-row {
+  display: flex;
+  margin-top: 22rpx;
 }
 
-/* 红色限速 */
-.chip-danger {
-  color: #b42318;
-  background: #fdeceb;
-}
-
-/* 限速数字小圆 */
-.chip-badge {
-  display: inline-block;
-  width: 34rpx;
-  height: 34rpx;
-  margin-right: 10rpx;
-  border: 3rpx solid #d0392b;
-  border-radius: 50%;
-  font-size: 19rpx;
-  line-height: 30rpx;
-  text-align: center;
-  vertical-align: middle;
-}
-
-/* 「已到达，确认完成」绿按钮 */
+/* 「已到达，确认完成」绿按钮，占满左侧剩余宽度 */
 .arrival-btn {
   display: flex;
+  flex: 1;
   align-items: center;
   justify-content: center;
   height: 84rpx;
-  margin-top: 22rpx;
+  margin: 0;
   padding: 0;
   border-radius: 18rpx;
   color: #ffffff;
@@ -398,47 +397,26 @@
   background: #e8f8ef;
 }
 
-/* 定位质量和语音状态 */
-.status-line {
-  margin-top: 22rpx;
-  color: #6b7889;
-  font-size: 23rpx;
-  text-align: center;
-}
-
-/* 定位状态小圆点默认灰 */
-.status-dot {
-  display: inline-block;
-  width: 14rpx;
-  height: 14rpx;
-  margin-right: 10rpx;
-  border-radius: 50%;
-  background: #b9c4d1;
-  vertical-align: middle;
-}
-
-/* 定位正常绿点 */
-.status-dot.quality-good {
-  background: #18a05a;
-}
-
-/* 定位较弱橙点 */
-.status-dot.quality-weak {
-  background: #ef7a1a;
-}
-
-/* 报告异常 / 结束导航 */
-.tools-row {
+/* 「退出」浅红底按钮，宽度固定 */
+.exit-btn {
   display: flex;
-  justify-content: space-between;
-  margin-top: 22rpx;
-  padding-top: 20rpx;
-  border-top: 1rpx solid #eef1f5;
-  color: #5a6a80;
-  font-size: 24rpx;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 180rpx;
+  height: 84rpx;
+  margin: 0 0 0 18rpx;
+  padding: 0;
+  border-radius: 18rpx;
+  color: #b42318;
+  background: #fdeceb;
+  font-size: 29rpx;
+  font-weight: 700;
+  line-height: 1.2;
+  box-sizing: border-box;
 }
 
-/* 「结束导航」红色 */
-.tools-row .stop {
-  color: #b42318;
+/* 去掉微信按钮边框 */
+.exit-btn::after {
+  border: none;
 }

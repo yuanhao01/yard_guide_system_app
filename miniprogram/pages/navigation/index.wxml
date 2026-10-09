@@ -46,6 +46,8 @@
     </view>
 
     <view class="map-zoom">
+      <!-- 当前路限速牌：红圈白底，放在右侧按钮栏最上面 -->
+      <view class="speed-sign" wx:if="{{speedLimit}}">{{speedLimit}}</view>
       <view class="zoom-btn flat-btn" bindtap="toggleFlatMode">{{flatMode ? '3D' : '2D'}}</view>
       <view class="zoom-btn" bindtap="zoomIn">＋</view>
       <view class="zoom-btn" bindtap="zoomOut">－</view>
@@ -57,7 +59,7 @@
     <view class="map-empty" wx:if="{{mapError}}">{{mapError}}</view>
   </view>
 
-  <!-- 底部：目的地、剩余、预计、限速、确认到达、结束 -->
+  <!-- 底部：目的地、剩余、预计、确认到达、退出 -->
   <view class="bottom-card">
     <view class="metrics">
       <view class="metric metric-dest">
@@ -78,26 +80,14 @@
       <view class="chip chip-warn">⚠ {{offYardHint}}，进入堆场后自动跟车</view>
     </view>
 
-    <view class="chips" wx:if="{{oneWayHint || twoWayHint || speedLimit || overspeed}}">
-      <view class="chip chip-warn" wx:if="{{oneWayHint}}">⚠ {{oneWayHint}}</view>
-      <view class="chip chip-info" wx:if="{{twoWayHint}}">⇅ {{twoWayHint}}</view>
-      <view class="chip chip-danger" wx:if="{{speedLimit}}">
-        <text class="chip-badge">{{speedLimit}}</text>限速 {{speedLimit}}
-      </view>
-      <view class="chip chip-danger" wx:if="{{overspeed}}">⚠ 超速</view>
+    <view class="chips" wx:if="{{oneWayHint}}">
+      <view class="chip chip-warn">⚠ {{oneWayHint}}</view>
     </view>
 
-    <button wx:if="{{arrivalSuggestion}}" class="arrival-btn" bindtap="confirmArrival">已到达，确认完成</button>
-    <button wx:else class="arrival-btn arrival-btn-ghost" bindtap="confirmArrival">我已到达</button>
-
-    <view class="status-line">
-      <text class="status-dot {{locationQualityClass}}"></text>
-      定位{{locationQuality}} · {{voiceOn ? '语音播报中' : '语音已关闭'}}
-    </view>
-
-    <view class="tools-row">
-      <view bindtap="reportException">报告异常</view>
-      <view class="stop" bindtap="cancelNavigation">结束导航</view>
+    <view class="action-row">
+      <button wx:if="{{arrivalSuggestion}}" class="arrival-btn" bindtap="confirmArrival">已到达，确认完成</button>
+      <button wx:else class="arrival-btn arrival-btn-ghost" bindtap="confirmArrival">我已到达</button>
+      <button class="exit-btn" bindtap="cancelNavigation">退出</button>
     </view>
   </view>
 </view>
