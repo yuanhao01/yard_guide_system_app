@@ -340,15 +340,34 @@ function projectWorldRoute(selfWorld, points) {
   return { points: clipped, remain }
 }
 
-/** 沿蓝线找第一个真实拐弯（叉积判定，与路线箭头同几何）。 */
+/** 沿折线从第 i 个点往回（step=-1）或往前（step=1）走够 span 米，取那里的点 */
+function pointAlong(points, i, step, span) {
+  let acc = 0 // 已经走了多少米
+  let j = i // 当前走到第几个点
+  // 走够米数或到头就停
+  while (j + step >= 0 && j + step < points.length && acc < span) {
+    // 裁线后的首点是普通对象没有 distanceTo，这里直接用 x/z 算
+    acc += Math.hypot(points[j + step].x - points[j].x, points[j + step].z - points[j].z)
+    j += step
+  }
+  return points[j]
+}
+
+/**
+ * 沿蓝线找第一个真实拐弯（叉积判定，与路线箭头同几何）。
+ * 蓝线拐角被 filletPolyline 切成 0.3 米一段的圆弧，相邻两段只差几度、又短于 0.4 米，
+ * 逐段比会把整个弯当直行；所以前后各看 5 米再算转角，把整段圆弧当一个弯。
+ */
 function firstTurnOnWorld(points) {
   if (!points || points.length < 3) return null
   let acc = 0 // 走到这个弯累计多少米
   for (let i = 1; i < points.length - 1; i += 1) {
     acc += points[i].distanceTo(points[i - 1])
-    const turn = turnAtWorld(points[i - 1], points[i], points[i + 1])
-    // 假弯、转角太小、刚起步 2 米内，都跳过
-    if (isFakeSnapTurn(turn.degrees) || Math.abs(turn.degrees) < 25 || acc <= 2) continue
+    // 刚起步 2 米内不报
+    if (acc <= 2) continue
+    const turn = turnAtWorld(pointAlong(points, i, -1, 5), points[i], pointAlong(points, i, 1, 5))
+    // 假弯、转角太小，都跳过
+    if (isFakeSnapTurn(turn.degrees) || Math.abs(turn.degrees) < 25) continue
     return { distance: acc, maneuver: turn.maneuver }
   }
   return null
