@@ -21,7 +21,7 @@
     <!-- 司机：车牌 + 堆场 -->
     <block wx:if="{{loginKind === 'driver'}}">
       <view class="field-label">车牌号</view>
-      <input class="field-input" maxlength="20" placeholder="例如 鲁A12345" value="{{plateNumber}}" bindinput="onPlateInput" />
+      <input class="field-input" maxlength="20" placeholder="请输入当前进场车辆的车牌号[如:沪A12345]" value="{{plateNumber}}" bindinput="onPlateInput" />
       <view class="field-label">堆场</view>
       <picker mode="selector" range="{{yardNames}}" value="{{yardIndex >= 0 ? yardIndex : 0}}" bindchange="onYardChange" disabled="{{!yardNames.length}}">
         <view class="field-input picker-value {{yardName ? '' : 'placeholder'}}">{{yardName || (yardNames.length ? '请选择堆场' : '堆场列表为空')}}</view>
@@ -29,7 +29,6 @@
       <!-- 堆场名单没拉下来时的原因 -->
       <view class="yards-error" wx:if="{{yardsLoadError}}">{{yardsLoadError}}</view>
       <button class="primary-button login-button" loading="{{submitting}}" disabled="{{submitting}}" bindtap="login">进入堆场</button>
-      <view class="login-tip">不用预先建账号，首次登录会自动出现在电脑端用户管理</view>
     </block>
 
     <!-- 现场人员：账号 + 密码 -->
@@ -42,6 +41,6 @@
       <view class="login-tip">道口、堆高机、调度账号由现场管理员在电脑端新增</view>
     </block>
     <!-- 定位用途说明 -->
-    <view class="privacy-tip">登录即表示同意仅在导航期间使用您的位置信息</view>
+    <!-- <view class="privacy-tip">登录即表示同意仅在导航期间使用您的位置信息</view> -->
   </view>
 </view>
