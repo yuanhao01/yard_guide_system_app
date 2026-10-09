@@ -1,4 +1,4 @@
-<!-- 作业任务确认：贝位、机械、作业类型、船公司、箱号，然后开始导航 -->
+<!-- 作业任务确认：贝位、作业类型、箱号，然后开始导航 -->
 <view class="page confirm-page" wx:if="{{target}}">
   <view class="hero">
     <view class="hero-title">作业任务确认</view>
@@ -9,34 +9,12 @@
     <view class="badge">手动选位</view>
     <view class="loc-name">{{target.targetName}}</view>
     <view class="loc-code">{{target.targetCode}}</view>
-    <!-- 好箱 / 作业类型 / 箱型 标签 -->
-    <view class="tag-row">
-      <text class="tag tag-green">好箱</text>
-      <text class="tag tag-green" wx:if="{{workTypeLabel}}">{{workTypeLabel}}</text>
-      <text class="tag tag-blue" wx:if="{{cntrSize}}">{{cntrSize}}</text>
-    </view>
 
-    <view class="field">
-      <view class="field-label">作业机械</view>
-      <picker wx:if="{{equipmentOptions.length}}" range="{{equipmentOptions}}" value="{{equipmentIndex}}" bindchange="onEquipmentChange">
-        <view class="field-value">{{equipmentOptions[equipmentIndex]}} ›</view>
-      </picker>
-      <view wx:elif="{{!taskOptionsLoaded}}" class="field-value muted">正在读取堆场机械…</view>
-      <view wx:else class="field-value muted">暂无作业机械，请在管理端叉车管理中维护</view>
-    </view>
     <view class="field">
       <view class="field-label">作业类型</view>
       <picker range="{{workTypeOptions}}" range-key="label" value="{{workTypeIndex}}" bindchange="onWorkTypeChange">
         <view class="field-value">{{workTypeOptions[workTypeIndex].label}} ›</view>
       </picker>
-    </view>
-    <view class="field">
-      <view class="field-label">船公司</view>
-      <picker wx:if="{{carrierOptions.length}}" range="{{carrierOptions}}" value="{{carrierIndex}}" bindchange="onCarrierChange">
-        <view class="field-value">{{carrierOptions[carrierIndex]}} ›</view>
-      </picker>
-      <view wx:elif="{{!taskOptionsLoaded}}" class="field-value muted">正在读取在场船公司…</view>
-      <view wx:else class="field-value muted">暂无船公司，请在管理端基础资料中维护</view>
     </view>
 
     <!-- 提空/提重才显示箱号，可反查贝位 -->

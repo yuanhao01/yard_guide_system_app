@@ -1,5 +1,5 @@
 /**
- * 作业任务确认：选机械、作业类型、船公司，可选箱号反查贝位，然后开导航。
+ * 作业任务确认：选作业类型，可选箱号反查贝位，然后开导航。
  * 依赖：request、location（取起点）、auth。
  */
 const request = require('../../utils/request')
@@ -26,18 +26,14 @@ Page({
     starting: false, // 正在开导航
     lookingUp: false, // 正在按箱号反查
     yardName: '', // 当前堆场名
-    equipmentOptions: [], // 作业机械名单
-    equipmentIndex: 0, // 选中第几台机械
     workTypeOptions: DEFAULT_WORK_TYPES, // 作业类型
     workTypeIndex: 0, // 选中第几种作业
     workTypeLabel: '提空', // 作业中文名
     needCntrNo: true, // 这种作业要不要填箱号
-    carrierOptions: [], // 在场船公司
-    carrierIndex: 0, // 选中哪家船公司
+    carrierCode: '', // 箱号反查带回的船公司，不让司机选，只随任务上报
     cntrNo: '', // 箱号
     cntrSize: '', // 箱型
     cntrHint: '', // 反查成功后的贝位提示
-    taskOptionsLoaded: false, // 机械和船公司有没有拉完
     forkliftInfo: null // 这块场区负责的叉车
   },
 
@@ -63,7 +59,7 @@ Page({
       workTypeLabel: DEFAULT_WORK_TYPES[0].label,
       needCntrNo: DEFAULT_WORK_TYPES[0].needCntr
     })
-    this.loadTaskOptions() // 拉机械和船公司
+    this.loadTaskOptions() // 拉作业类型
     this.loadForkliftInfo(target && target.blockId) // 拉这块场区的叉车
   },
 
@@ -81,16 +77,10 @@ Page({
     }
   },
 
-  /** 同时拉作业机械和在场船公司 */
+  /** 拉后台配置的作业类型；拉不到就用默认四种 */
   async loadTaskOptions() {
     try {
-      const [equipment, carriers, workTypes] = await Promise.all([
-        request({ url: '/navigation/mobile/equipment' }),
-        request({ url: '/navigation/mobile/carriers' }),
-        request({ url: '/navigation/mobile/work-types' }).catch(() => null)
-      ])
-      const equipmentOptions = (equipment || []).map(item => item.label || item.value).filter(Boolean)
-      const carrierOptions = (carriers || []).map(item => item.value || item.label).filter(Boolean)
+      const workTypes = await request({ url: '/navigation/mobile/work-types' })
       const workTypeOptions = (workTypes || [])
         .map(item => ({
           value: item.value,
@@ -98,32 +88,17 @@ Page({
           needCntr: item.needCntr !== false
         }))
         .filter(item => item.value)
-      const patch = {}
-      if (equipmentOptions.length) {
-        patch.equipmentOptions = equipmentOptions
-        patch.equipmentIndex = 0
-      }
-      if (carrierOptions.length) {
-        patch.carrierOptions = carrierOptions
-        patch.carrierIndex = 0
-      }
       if (workTypeOptions.length) {
-        patch.workTypeOptions = workTypeOptions
-        patch.workTypeIndex = 0
-        patch.workTypeLabel = workTypeOptions[0].label
-        patch.needCntrNo = !!workTypeOptions[0].needCntr
+        this.setData({
+          workTypeOptions,
+          workTypeIndex: 0,
+          workTypeLabel: workTypeOptions[0].label,
+          needCntrNo: !!workTypeOptions[0].needCntr
+        })
       }
-      patch.taskOptionsLoaded = true
-      this.setData(patch)
     } catch (error) {
-      this.setData({ taskOptionsLoaded: true })
-      wx.showToast({ title: error.message || '作业选项加载失败', icon: 'none' })
+      // 拉不到就沿用默认四种作业类型
     }
-  },
-
-  /** 换了作业机械 */
-  onEquipmentChange(event) {
-    this.setData({ equipmentIndex: Number(event.detail.value) })
   },
 
   /** 换了作业类型：提空/提重要箱号，还空/还重可以不填 */
@@ -137,11 +112,6 @@ Page({
       cntrHint: work.needCntr ? this.data.cntrHint : '', // 不需要箱号就清提示
       cntrSize: work.needCntr ? this.data.cntrSize : ''
     })
-  },
-
-  /** 换了船公司 */
-  onCarrierChange(event) {
-    this.setData({ carrierIndex: Number(event.detail.value) })
   },
 
   /** 输入箱号，自动转大写 */
@@ -175,14 +145,8 @@ Page({
           blockName: displayAreaText(target.blockName)
         }
       }
-      // 箱子带了船公司，自动选上；名单里没有就补进去
-      if (result.carrierCode) {
-        const code = String(result.carrierCode).toUpperCase()
-        const options = this.data.carrierOptions.slice()
-        if (options.indexOf(code) < 0) options.push(code)
-        patch.carrierOptions = options
-        patch.carrierIndex = options.indexOf(code)
-      }
+      // 箱子带了船公司就记下，开导航时随任务上报
+      patch.carrierCode = result.carrierCode ? String(result.carrierCode).toUpperCase() : ''
       this.setData(patch)
       if (target && target.blockId) {
         this.loadForkliftInfo(target.blockId)
@@ -202,14 +166,6 @@ Page({
       wx.showToast({ title: '请先确认目的贝位', icon: 'none' })
       return
     }
-    if (!this.data.equipmentOptions.length) {
-      wx.showToast({ title: '当前堆场尚未配置作业机械，请在管理端叉车管理中维护', icon: 'none' })
-      return
-    }
-    if (!this.data.carrierOptions.length) {
-      wx.showToast({ title: '当前堆场没有船公司，请在管理端基础资料中维护', icon: 'none' })
-      return
-    }
     this.setData({ starting: true })
     try {
       const location = await locationUtil.getCurrentLocation() // 规划起点
@@ -222,8 +178,7 @@ Page({
           purpose: 'job', // 作业导航
           workType: this.data.workTypeOptions[this.data.workTypeIndex].value,
           workTypeLabel: this.data.workTypeLabel,
-          equipmentName: this.data.equipmentOptions[this.data.equipmentIndex],
-          carrierCode: this.data.carrierOptions[this.data.carrierIndex],
+          carrierCode: this.data.carrierCode || '',
           cntrNo: this.data.cntrNo || '',
           cntrSize: this.data.cntrSize || '',
           cntrCondition: '好箱',
