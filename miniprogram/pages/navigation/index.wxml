@@ -84,10 +84,13 @@
       <view class="chip chip-warn">⚠ {{oneWayHint}}</view>
     </view>
 
+    <!-- 验箱区、出场口导航不确认到位，只留「退出」并占满整行 -->
     <view class="action-row">
-      <button wx:if="{{arrivalSuggestion}}" class="arrival-btn" bindtap="confirmArrival">已到达，确认完成</button>
-      <button wx:else class="arrival-btn arrival-btn-ghost" bindtap="confirmArrival">我已到达</button>
-      <button class="exit-btn" bindtap="cancelNavigation">退出</button>
+      <block wx:if="{{showArrive}}">
+        <button wx:if="{{arrivalSuggestion}}" class="arrival-btn" bindtap="confirmArrival">已到达，确认完成</button>
+        <button wx:else class="arrival-btn arrival-btn-ghost" bindtap="confirmArrival">我已到达</button>
+      </block>
+      <button class="exit-btn {{showArrive ? '' : 'exit-btn-full'}}" bindtap="cancelNavigation">退出</button>
     </view>
   </view>
 </view>

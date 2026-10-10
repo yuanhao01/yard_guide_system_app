@@ -21,7 +21,7 @@
     </view>
 
     <!-- 三维小景：集卡停在车道上 -->
-    <view class="scene-wrap">
+    <!-- <view class="scene-wrap">
       <canvas type="webgl" id="arriveCanvas" class="arrive-canvas"></canvas>
       <view class="scene-overlay" aria-hidden="true">
         <view class="scene-tag">
@@ -31,7 +31,7 @@
         <view class="parking-box"></view>
       </view>
       <view class="scene-fallback" wx:if="{{sceneFailed}}">画面暂时加不出来，不影响确认到位</view>
-    </view>
+    </view> -->
 
     <!-- 到位时间、箱区校验、定位精度 -->
     <view class="meta">

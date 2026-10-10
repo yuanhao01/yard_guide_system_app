@@ -129,7 +129,7 @@
   font-weight: 600;
 }
 
-/* 「选择导航方式 / 协同交流群」小节标题 */
+/* 「去作业贝位 / 一键导航 / 协同交流群」小节标题 */
 .section-title {
   margin: 0 4rpx 20rpx;
   color: #52635b;
@@ -137,15 +137,105 @@
   font-weight: 600;
 }
 
-/* 手动选贝位、扫一扫两张白卡 */
-.action-card {
-  display: flex;
-  align-items: center;
-  margin-bottom: 22rpx;
+/* 去作业贝位的大白卡：上面说明，下面两个按钮 */
+.job-card {
+  margin-bottom: 36rpx;
   padding: 30rpx;
   border: 1rpx solid #e1e9e5;
   border-radius: 24rpx;
   background: #ffffff;
+}
+
+/* 卡片上半：图标 + 标题说明 */
+.job-head {
+  display: flex;
+  align-items: center;
+}
+
+/* 卡片下半：手动选贝位、扫码两个按钮并排 */
+.job-actions {
+  display: flex;
+  gap: 18rpx;
+  margin-top: 28rpx;
+}
+
+/* 卡片里的按钮，默认浅绿描边 */
+.job-btn {
+  flex: 1;
+  height: 84rpx;
+  border: 2rpx solid #147d55;
+  border-radius: 18rpx;
+  color: #147d55;
+  background: #ffffff;
+  font-size: 28rpx;
+  font-weight: 700;
+  line-height: 80rpx;
+  text-align: center;
+  box-sizing: border-box;
+}
+
+/* 主按钮：手动选择贝位，实心绿 */
+.job-btn-main {
+  color: #ffffff;
+  background: #147d55;
+}
+
+/* 验箱区、出场口两块并排 */
+.quick-grid {
+  display: flex;
+  gap: 22rpx;
+  margin-bottom: 28rpx;
+}
+
+/* 一键导航小卡 */
+.quick-card {
+  flex: 1;
+  padding: 28rpx 26rpx;
+  border: 1rpx solid #e1e9e5;
+  border-radius: 24rpx;
+  background: #ffffff;
+}
+
+/* 正在规划时变淡，防止连点 */
+.quick-busy {
+  opacity: 0.6;
+}
+
+/* 小卡左上方标 */
+.quick-icon {
+  width: 72rpx;
+  height: 72rpx;
+  border-radius: 20rpx;
+  font-size: 28rpx;
+  font-weight: 700;
+  line-height: 72rpx;
+  text-align: center;
+}
+
+/* 验箱区：蓝色 */
+.quick-icon-safety {
+  color: #1d4f91;
+  background: #e8f0fb;
+}
+
+/* 出场口：橙色 */
+.quick-icon-exit {
+  color: #9a5a0a;
+  background: #fff0d9;
+}
+
+/* 小卡标题 */
+.quick-title {
+  margin-top: 20rpx;
+  font-size: 31rpx;
+  font-weight: 700;
+}
+
+/* 小卡灰色说明 */
+.quick-desc {
+  margin-top: 8rpx;
+  color: #7c8983;
+  font-size: 23rpx;
 }
 
 /* 白卡左边绿色方标 */
@@ -161,7 +251,7 @@
   text-align: center;
 }
 
-/* 「选」字用浅橙底，和扫码绿标区分 */
+/* 「贝」字用浅橙底 */
 .select-icon {
   color: #9a5a0a;
   background: #fff0d9;
@@ -184,12 +274,6 @@
   margin-top: 9rpx;
   color: #7c8983;
   font-size: 23rpx;
-}
-
-/* 白卡右侧箭头 */
-.arrow {
-  color: #9ba7a1;
-  font-size: 50rpx;
 }
 
 /* 协同群深蓝卡片 */

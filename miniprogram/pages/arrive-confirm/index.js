@@ -1,10 +1,9 @@
 /**
- * 到位确认：到贝位后直接确认，再去验箱或出场。
- * 依赖：request、location、specialNav、vehicleLoader（画集卡小景）、threejs。
+ * 到位确认：到贝位、验箱区或出场口后直接确认，确认完回首页；验箱、出场由首页单独发起，不再自动接续。
+ * 依赖：request、location、vehicleLoader（画集卡小景）、threejs。
  */
 const request = require('../../utils/request')
 const locationUtil = require('../../utils/location')
-const specialNav = require('../../utils/specialNav')
 const vehicleLoader = require('../../utils/vehicleLoader')
 const { createScopedThreejs } = require('../../libs/threejs/index.js')
 
@@ -79,18 +78,23 @@ Page({
       this.session = await request({ url: `/navigation/mobile/sessions/${this.data.sessionId}` })
       const purpose = this.session.purpose || 'job'
       const name = this.session.targetName || this.data.targetName
-      const hint = purpose === 'exit'
-        ? '请按门岗指示离场'
-        : (this.session.equipmentName
-          ? `等待${this.session.equipmentName}完成作业`
-          : '等待作业机械完成作业')
+      // 按用途换提示：出场口、验箱区、作业贝位
+      const texts = {
+        exit: { hint: '请按门岗指示离场', step: '出场确认', park: '请按门岗指示驶离', btn: '确认离场' },
+        safety: { hint: '已到达验箱区', step: '到位确认', park: '请在指定位置停稳', btn: '确认到位' }
+      }[purpose] || {
+        hint: this.session.equipmentName ? `等待${this.session.equipmentName}完成作业` : '等待作业机械完成作业',
+        step: '到位作业',
+        park: '请听从机械手指挥停车',
+        btn: '确认到位'
+      }
       this.setData({
         targetName: name,
         verifyLabel: verifyLabelFromName(name),
-        equipmentHint: hint,
-        stepLabel: purpose === 'exit' ? '出场确认' : '到位作业',
-        parkTip: purpose === 'exit' ? '请按门岗指示驶离' : '请听从机械手指挥停车',
-        confirmBtnText: purpose === 'exit' ? '确认离场' : '确认到位'
+        equipmentHint: texts.hint,
+        stepLabel: texts.step,
+        parkTip: texts.park,
+        confirmBtnText: texts.btn
       })
     } catch (error) {
       // 会话取不到时仍可确认到位
@@ -152,28 +156,17 @@ Page({
     this.confirmArrive()
   },
 
-  /** 告诉后台已经到位，然后按下一步去验箱、出场或回首页 */
+  /** 告诉后台已经到位，然后回首页；要验箱或出场，司机在首页自己点 */
   async confirmArrive() {
     if (!this.data.sessionId || this.data.confirming) return
     this.setData({ confirming: true })
     try {
-      const session = await request({
+      await request({
         url: `/navigation/mobile/sessions/${this.data.sessionId}/arrive`,
         method: 'POST'
       })
-      this.session = session || this.session
-      const next = (session && session.nextAction) || (this.session && this.session.nextAction)
-      if (next === 'safety') {
-        wx.redirectTo({
-          url: `/pages/safety-zone/index?jobSessionId=${this.data.sessionId}`
-        })
-        return
-      }
-      if (next === 'exit') {
-        await this.startExitNav()
-        return
-      }
-      wx.showToast({ title: '到位已确认', icon: 'success' })
+      const isExit = this.session && this.session.purpose === 'exit'
+      wx.showToast({ title: isExit ? '已离场' : '到位已确认', icon: 'success' })
       setTimeout(() => wx.switchTab({ url: '/pages/home/index' }), 600)
     } catch (error) {
       wx.showToast({ title: error.message, icon: 'none' })
@@ -189,15 +182,5 @@ Page({
       return
     }
     wx.redirectTo({ url: `/pages/navigation/index?sessionId=${this.data.sessionId}` })
-  },
-
-  /** 验箱之后直接开出场导航 */
-  async startExitNav() {
-    const session = await specialNav.startSpecialNav({
-      purpose: 'exit',
-      task: this.session,
-      parentSessionId: specialNav.collabSessionId(this.session)
-    })
-    wx.redirectTo({ url: `/pages/navigation/index?sessionId=${session.id}` })
   }
 })

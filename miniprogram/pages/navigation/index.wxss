@@ -416,6 +416,13 @@
   box-sizing: border-box;
 }
 
+/* 只有「退出」一个按钮时占满整行 */
+.exit-btn-full {
+  flex: 1;
+  width: auto;
+  margin-left: 0;
+}
+
 /* 去掉微信按钮边框 */
 .exit-btn::after {
   border: none;

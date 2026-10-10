@@ -47,7 +47,7 @@
     </view>
   </block>
 
-  <!-- 司机：进行中任务、选贝位、扫码、协同群、安全提示 -->
+  <!-- 司机：进行中任务、去贝位、验箱区/出场口、协同群、安全提示 -->
   <block wx:else>
     <view wx:if="{{currentSession}}" class="current-card" bindtap="continueNavigation">
       <view class="current-tag">进行中</view>
@@ -56,22 +56,41 @@
       <view class="current-action">{{currentAction}}</view>
     </view>
 
-    <view class="section-title">选择导航方式</view>
-    <view class="action-card" bindtap="selectTarget">
-      <view class="action-icon select-icon">选</view>
-      <view class="action-content">
-        <view class="action-title">手动选择贝位</view>
-        <view class="action-desc">按场区和贝位选择目的地</view>
+    <!-- 去作业贝位：手动选和扫码放在同一张卡里 -->
+    <view class="section-title">去作业贝位</view>
+    <view class="job-card">
+      <view class="job-head">
+        <view class="action-icon select-icon">贝</view>
+        <view class="action-content">
+          <view class="action-title">导航到作业贝位</view>
+          <view class="action-desc">提箱、还箱都从这里选目的地</view>
+        </view>
       </view>
-      <view class="arrow">›</view>
+      <view class="job-actions">
+        <view class="job-btn job-btn-main" bindtap="selectTarget">手动选择贝位</view>
+        <view class="job-btn" bindtap="scanCode">扫码导航</view>
+      </view>
     </view>
-    <view class="action-card scan-card" bindtap="scanCode">
-      <view class="action-icon">扫</view>
-      <view class="action-content">
-        <view class="action-title">扫一扫导航</view>
-        <view class="action-desc">扫描贝位位置码（作业单 EIR 稍后接入）</view>
+
+    <view class="safety-card">
+      <view class="safety-title">行车安全提示</view>
+      <view class="safety-text">请在停车状态下操作手机。路线仅作场内辅助，请始终服从现场交通标识和人员指挥。</view>
+    </view>
+
+    <!-- 验箱区、出场口：点一下就按当前位置规划路线 -->
+    <view class="section-title"></view>
+    <view class="section-title">一键导航</view>
+    <view class="quick-grid">
+      <view class="quick-card {{specialLoading === 'safety' ? 'quick-busy' : ''}}" bindtap="goSafety">
+        <view class="quick-icon quick-icon-safety">验</view>
+        <view class="quick-title">验箱区</view>
+        <view class="quick-desc">{{specialLoading === 'safety' ? '规划中…' : '从当前位置出发'}}</view>
       </view>
-      <view class="arrow">›</view>
+      <view class="quick-card {{specialLoading === 'exit' ? 'quick-busy' : ''}}" bindtap="goExit">
+        <view class="quick-icon quick-icon-exit">出</view>
+        <view class="quick-title">出场口</view>
+        <view class="quick-desc">{{specialLoading === 'exit' ? '规划中…' : '从当前位置出发'}}</view>
+      </view>
     </view>
 
     <view wx:if="{{collabGroup}}" class="collab-card" bindtap="openCollabGroup">
@@ -86,11 +105,6 @@
         <view class="collab-members">{{collabGroup.memberText}}</view>
         <view class="collab-time" wx:if="{{collabGroup.lastMsgTimeText}}">{{collabGroup.lastMsgTimeText}}</view>
       </view>
-    </view>
-
-    <view class="safety-card">
-      <view class="safety-title">行车安全提示</view>
-      <view class="safety-text">请在停车状态下操作手机。路线仅作场内辅助，请始终服从现场交通标识和人员指挥。</view>
     </view>
   </block>
 </view>

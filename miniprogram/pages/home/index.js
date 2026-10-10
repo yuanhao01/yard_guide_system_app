@@ -1,6 +1,7 @@
 /**
- * 首页：司机看进行中导航、选贝位、扫码；现场岗位看协同群列表。
- * 依赖：request、auth、specialNav（从首页直接开出场导航）。
+ * 首页：司机看进行中导航、去作业贝位、一键去验箱区/出场口；现场岗位看协同群列表。
+ * 验箱、出场不再跟在作业后面自动接续，司机需要时在首页点一下，按当前位置规划。
+ * 依赖：request、auth、specialNav（开验箱/出场导航）。
  */
 const request = require('../../utils/request')
 const auth = require('../../utils/auth')
@@ -20,31 +21,27 @@ function remainMetersText(session) {
   return '--'
 }
 
-/** 根据当前会话状态，写出首页橙色卡上的标题、说明和按钮字 */
+/** 会话还在路上（导航中 / 待确认到达）才算进行中 */
+function isActive(session) {
+  return Boolean(session) && (session.status === 0 || session.status === 1)
+}
+
+/** 已到位、协同群还开着的作业会话，验箱/出场要挂在它下面，协同群才能对上并在出场后解散 */
+function openJobOf(session) {
+  if (!session || isActive(session)) return null
+  return (!session.purpose || session.purpose === 'job') ? session : null
+}
+
+/** 目的地用途的中文名 */
+const PURPOSE_NAME = { job: '作业贝位', safety: '验箱区', exit: '出场口' }
+
+/** 根据进行中的会话，写出首页橙色卡上的标题、说明和按钮字 */
 function describeSession(session) {
-  if (!session) {
+  if (!isActive(session)) {
     return { currentTitle: '', currentDetail: '', currentAction: '' }
   }
-  const next = session.nextAction // 后台说下一步该干什么
-  // 作业完了要去验箱
-  if (next === 'safety' || next === 'inspect') {
-    return {
-      currentTitle: '前往安全操作区验箱',
-      currentDetail: session.workTypeLabel ? `${session.workTypeLabel}完成，请先验箱再出场` : '请先验箱再出场',
-      currentAction: '去验箱 →'
-    }
-  }
-  // 验箱完了要去出场口
-  if (next === 'exit' && session.status === 2) {
-    return {
-      currentTitle: '前往出场口',
-      currentDetail: '验箱完成，开始出场导航',
-      currentAction: '出场导航 →'
-    }
-  }
-  // 还在去贝位/验箱/出场的路上
   return {
-    currentTitle: `前往 ${session.targetName || ''}`,
+    currentTitle: `前往 ${session.targetName || PURPOSE_NAME[session.purpose] || ''}`,
     currentDetail: `剩余约 ${remainMetersText(session)} 米`,
     currentAction: '继续导航 →'
   }
@@ -103,7 +100,8 @@ Page({
     roleLabel: '', // 岗位名
     displayName: '', // 顶部显示名
     yardName: '', // 当前堆场名
-    currentSession: null, // 司机进行中的那一趟
+    currentSession: null, // 司机进行中的那一趟（只放还在路上的）
+    specialLoading: '', // 正在规划的一键导航：safety / exit
     collabGroup: null, // 司机这一趟对应的协同群
     collabGroups: [], // 现场岗位的群列表
     currentTitle: '', // 橙色卡标题
@@ -232,9 +230,9 @@ Page({
     try {
       const currentSession = await request({ url: '/navigation/mobile/sessions/current' })
       let collabGroup = null
-      // 纯出场且没有挂作业会话时不显示协同群
+      // 协同群只建在作业会话上：单独发起的验箱/出场没挂作业时不显示
       const showCollab = Boolean(currentSession)
-        && (currentSession.purpose !== 'exit' || currentSession.parentSessionId)
+        && (!currentSession.purpose || currentSession.purpose === 'job' || currentSession.parentSessionId)
       if (showCollab) {
         try {
           const group = await request({
@@ -246,13 +244,15 @@ Page({
           collabGroup = null
         }
       }
+      this.openJob = openJobOf(currentSession) // 已到位的作业，验箱/出场挂它下面
       this.setData({
-        currentSession,
+        currentSession: isActive(currentSession) ? currentSession : null,
         collabGroup,
         collabGroups: [], // 司机首页不用岗位群列表
         ...describeSession(currentSession)
       })
     } catch (error) {
+      this.openJob = null
       this.setData({
         currentSession: null,
         collabGroup: null,
@@ -302,48 +302,80 @@ Page({
     wx.navigateTo({ url: '/pages/select-target/index' })
   },
 
-  /** 点橙色卡：按状态去导航 / 验箱 / 出场 */
+  /** 点橙色卡：贝位、验箱区、出场口都回导航页接着走 */
   continueNavigation() {
     const session = this.data.currentSession
     if (!session) return
-    // 还在走的路上
-    if (session.status === 0 || session.status === 1) {
-      if (session.purpose === 'safety') {
-        wx.navigateTo({ url: `/pages/safety-zone/index?sessionId=${session.id}` })
-        return
-      }
-      wx.navigateTo({ url: `/pages/navigation/index?sessionId=${session.id}` })
-      return
-    }
-    // 作业完了去验箱
-    if (session.nextAction === 'safety' || session.nextAction === 'inspect') {
-      wx.navigateTo({
-        url: `/pages/safety-zone/index?jobSessionId=${session.jobSessionId || session.id}`
-      })
-      return
-    }
-    // 验箱完了开出场
-    if (session.nextAction === 'exit') {
-      this.continueExit(session)
-      return
-    }
     wx.navigateTo({ url: `/pages/navigation/index?sessionId=${session.id}` })
   },
 
-  /** 从首页直接开一趟出场导航 */
-  async continueExit(session) {
-    try {
-      wx.showLoading({ title: '规划出场' })
-      const next = await specialNav.startSpecialNav({
-        purpose: 'exit',
-        parentSessionId: session.jobSessionId || session.id,
-        task: session
+  /** 一键去验箱区 */
+  goSafety() {
+    this.startSpecial('safety')
+  },
+
+  /** 一键去出场口 */
+  goExit() {
+    this.startSpecial('exit')
+  },
+
+  /** 按当前位置开一趟去验箱区/出场口的导航；有别的进行中导航先问要不要结束 */
+  startSpecial(purpose) {
+    if (this.data.isFieldRole || this.data.specialLoading) return
+    const current = this.data.currentSession
+    // 正在去的就是这里，直接接着走
+    if (current && current.purpose === purpose) {
+      this.continueNavigation()
+      return
+    }
+    // 还有别的导航没走完：后台一次只允许一趟，先问司机
+    if (current) {
+      wx.showModal({
+        title: '切换导航',
+        content: `当前正在前往${current.targetName || PURPOSE_NAME[current.purpose] || '目的地'}，是否结束并改去${PURPOSE_NAME[purpose]}？`,
+        confirmText: '结束并前往',
+        success: async result => {
+          if (!result.confirm) return
+          try {
+            await request({ url: `/navigation/mobile/sessions/${current.id}/cancel`, method: 'POST' })
+          } catch (error) {
+            wx.showToast({ title: error.message || '结束当前导航失败', icon: 'none' })
+            return
+          }
+          this.setData({ currentSession: null, ...describeSession(null) })
+          this.openSpecial(purpose)
+        }
       })
-      wx.hideLoading()
-      wx.navigateTo({ url: `/pages/navigation/index?sessionId=${next.id}` })
+      return
+    }
+    this.openSpecial(purpose)
+  },
+
+  /** 取当前位置和验箱区/出场口，开会话后进对应页面 */
+  async openSpecial(purpose) {
+    this.setData({ specialLoading: purpose })
+    try {
+      const job = this.openJob
+      const session = await specialNav.startSpecialNav({
+        purpose,
+        task: job, // 有已到位的作业就带上箱号等信息
+        parentSessionId: job ? job.id : undefined
+      })
+      wx.navigateTo({ url: `/pages/navigation/index?sessionId=${session.id}` })
     } catch (error) {
-      wx.hideLoading()
-      wx.showToast({ title: error.message || '无法开始出场导航', icon: 'none' })
+      const message = error.message || '无法开始导航'
+      const needSetting = /定位权限|定位服务|请在设置中允许|auth deny/i.test(message)
+      wx.showModal({
+        title: '无法开始导航',
+        content: message,
+        confirmText: needSetting ? '打开设置' : '知道了',
+        showCancel: needSetting,
+        success: result => {
+          if (needSetting && result.confirm) wx.openSetting()
+        }
+      })
+    } finally {
+      this.setData({ specialLoading: '' })
     }
   },
 

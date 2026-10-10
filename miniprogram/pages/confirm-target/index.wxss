@@ -62,34 +62,7 @@
   font-size: 24rpx;
 }
 
-/* 好箱 / 提空 / 箱型 标签行 */
-.tag-row {
-  display: flex;
-  gap: 12rpx;
-  margin-top: 18rpx;
-}
-
-/* 单个标签 */
-.tag {
-  padding: 6rpx 14rpx;
-  border-radius: 8rpx;
-  font-size: 22rpx;
-  font-weight: 600;
-}
-
-/* 绿色标签：好箱、作业类型 */
-.tag-green {
-  color: #147d55;
-  background: #e6f4ed;
-}
-
-/* 蓝色标签：箱型 */
-.tag-blue {
-  color: #1268e8;
-  background: #e8f1fc;
-}
-
-/* 作业类型 / 箱号 / 负责叉车 每一栏 */
+/* 负责叉车等每一栏 */
 .field {
   margin-top: 28rpx;
   padding-top: 22rpx;
@@ -110,45 +83,7 @@
   font-weight: 600;
 }
 
-/* 箱号输入和「查询」横排 */
-.cntr-row {
-  display: flex;
-  align-items: center;
-  margin-top: 12rpx;
-  padding: 0 8rpx 0 20rpx;
-  border: 1rpx solid #d7e0ea;
-  border-radius: 14rpx;
-  background: #f8fafc;
-}
-
-/* 箱号输入框 */
-.cntr-input {
-  flex: 1;
-  height: 80rpx;
-  font-size: 28rpx;
-}
-
-/* 「查询」二字 */
-.cntr-btn {
-  padding: 0 22rpx;
-  color: #1268e8;
-  font-size: 26rpx;
-  font-weight: 700;
-}
-
-/* 正在查询时灰掉 */
-.cntr-btn.disabled {
-  color: #94a3b8;
-}
-
-/* 反查成功后的绿色贝位提示 */
-.cntr-hint {
-  margin-top: 12rpx;
-  color: #147d55;
-  font-size: 23rpx;
-}
-
-/* 底部场区、贝位、到达半径三列 */
+/* 底部场区、贝位、路线距离三列 */
 .meta-row {
   display: flex;
   justify-content: space-between;

@@ -1,9 +1,10 @@
 /**
- * 特殊导航：作业完成后去验箱区，或验箱后再去出场口。
- * 依赖：request（问后台要目的地并开新会话）、location（取当前位置）。
+ * 特殊导航：首页一键去验箱区或出场口，从当前位置直接规划，不必先做完作业。
+ * 依赖：request（问后台要目的地并开新会话）、location（取当前位置）、auth（没有作业会话时取当前堆场）。
  */
 const request = require('./request')
 const locationUtil = require('./location')
+const auth = require('./auth')
 
 /** 把当前作业任务上的箱号、机械、作业类型抄到新会话上，验箱/出场页才能继续显示 */
 function copyTaskFields(session) {
@@ -23,8 +24,9 @@ function copyTaskFields(session) {
 
 /** 向后台要这个堆场已配置好的验箱区或出场口，没有配置就直接报错给司机看 */
 async function resolveConfiguredTarget(purpose, task) {
-  // 从任务上取出堆场编号
-  const yardId = task && task.cyId
+  // 优先用作业任务上的堆场，没有作业就用司机当前所在堆场
+  const user = auth.getUser() || {}
+  const yardId = (task && task.cyId) || user.currentCyId
   // 不知道是哪个堆场就无法问配置
   if (!yardId) {
     // 按用途给出不同提示
@@ -71,19 +73,8 @@ async function startSpecialNav(options) {
   return session
 }
 
-/** 协同群要挂在作业会话上：验箱/出场会话本身不是作业，要回查父会话编号 */
-function collabSessionId(session) {
-  // 没有会话就没有群
-  if (!session) return ''
-  // 作业会话直接用自己的编号
-  if (!session.purpose || session.purpose === 'job') return session.id
-  // 验箱/出场用父会话编号，没有父会话再退回自己
-  return session.parentSessionId || session.id
-}
-
-// 给到位确认、验箱页、首页出场按钮用
+// 给首页验箱/出场按钮用
 module.exports = {
   copyTaskFields, // 抄作业字段
-  startSpecialNav, // 开验箱或出场导航
-  collabSessionId // 算出协同群该挂哪一趟
+  startSpecialNav // 开验箱或出场导航
 }

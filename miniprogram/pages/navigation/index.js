@@ -19,6 +19,11 @@ function displayAreaText(text) {
   return routeInstruction.displayAreaName(text) // 场区名改成「区」
 }
 
+/** 只有去作业贝位要确认到位；验箱区、出场口只留「退出」 */
+function canConfirmArrive(purpose) {
+  return !purpose || purpose === 'job'
+}
+
 /** 沿场图蓝线还剩多少米 */
 function remainingAlongRoute(self, points, blocks) {
   return routeInstruction.remainingAlongRoute(self, points, blocks)
@@ -180,6 +185,7 @@ Page({
     remainingDistance: '--', // 剩余米数
     estimatedMinutes: '--', // 预计分钟
     arrivalSuggestion: false, // 后台认为到了
+    showArrive: true, // 显示「我已到达」；验箱区、出场口导航只留「退出」
     voiceOn: true, // 语音开着
     followMode: true, // 镜头跟车
     speedLimit: '', // 当前路限速
@@ -424,7 +430,7 @@ Page({
       targetName: targetName || (session.purpose && session.purpose !== prev.purpose ? '' : prev.targetName),
       purpose: session.purpose || prev.purpose
     }
-    this.setData({ session: nextSession })
+    this.setData({ session: nextSession, showArrive: canConfirmArrive(nextSession.purpose) })
     this.syncScene()
     const instruction = pickLocalInstruction(
       this,
@@ -456,14 +462,9 @@ Page({
     // 首次判定到达：进入到位确认页（对齐 03）
     if (arrivalSuggestion && !this._arrivedRedirected) {
       this._arrivedRedirected = true
-      const purpose = session.purpose || 'job'
+      // 验箱区、出场口只导航、不确认到位：到了就停在导航页，司机点「退出」结束
+      if (!canConfirmArrive(nextSession.purpose)) return
       setTimeout(() => {
-        if (purpose === 'safety') {
-          wx.redirectTo({
-            url: `/pages/safety-zone/index?sessionId=${this.sessionId}`
-          })
-          return
-        }
         wx.redirectTo({
           url: `/pages/arrive-confirm/index?sessionId=${this.sessionId}&targetName=${encodeURIComponent(displayAreaText(session.targetName || ''))}`
         })
@@ -1137,7 +1138,6 @@ Page({
 
   /** 司机点「我已到达」：先问还剩多远，确认后再进到位页 */
   confirmArrival() {
-    const purpose = (this.data.session && this.data.session.purpose) || 'job'
     const name = (this.data.session && this.data.session.targetName) || '目的贝位'
     const remain = Number(this.data.remainingDistance)
     const remainText = Number.isFinite(remain) && remain > 0
@@ -1150,10 +1150,6 @@ Page({
       cancelText: '取消',
       success: result => {
         if (!result.confirm) return
-        if (purpose === 'safety') {
-          wx.redirectTo({ url: `/pages/safety-zone/index?sessionId=${this.sessionId}` })
-          return
-        }
         wx.redirectTo({
           url: `/pages/arrive-confirm/index?sessionId=${this.sessionId}&targetName=${encodeURIComponent(name)}`
         })
@@ -1165,7 +1161,9 @@ Page({
   cancelNavigation() {
     wx.showModal({
       title: '退出导航',
-      content: '结束后将停止位置上报，确定继续吗？',
+      content: this.data.session && this.data.session.purpose === 'exit'
+        ? '退出后将结束出场导航并关闭现场协同群，确定继续吗？'
+        : '结束后将停止位置上报，确定继续吗？',
       confirmColor: '#b42318',
       success: async result => {
         if (!result.confirm) return

@@ -1,5 +1,6 @@
 /**
- * 作业任务确认：选作业类型，可选箱号反查贝位，然后开导航。
+ * 任务确认：确认目的贝位，然后开导航。
+ * 不再分提空/提重/还空/还重，到位确认后就结束，验箱、出场由首页单独发起。
  * 依赖：request、location（取起点）、auth。
  */
 const request = require('../../utils/request')
@@ -11,30 +12,14 @@ function displayAreaText(text) {
   return String(text || '').replace(/座场区/g, '区').replace(/座/g, '区')
 }
 
-// 四种作业：提空/提重要箱号，还空/还重可以不填
-const DEFAULT_WORK_TYPES = [
-  { value: 'pickup_empty', label: '提空', needCntr: true },
-  { value: 'pickup_full', label: '提重', needCntr: true },
-  { value: 'return_empty', label: '还空', needCntr: false },
-  { value: 'return_full', label: '还重', needCntr: false }
-]
-
 Page({
   data: {
     target: null, // 目的贝位
     sourceType: 0, // 0 手动选，1 扫码
     starting: false, // 正在开导航
-    lookingUp: false, // 正在按箱号反查
     yardName: '', // 当前堆场名
-    workTypeOptions: DEFAULT_WORK_TYPES, // 作业类型
-    workTypeIndex: 0, // 选中第几种作业
-    workTypeLabel: '提空', // 作业中文名
-    needCntrNo: true, // 这种作业要不要填箱号
-    carrierCode: '', // 箱号反查带回的船公司，不让司机选，只随任务上报
-    cntrNo: '', // 箱号
-    cntrSize: '', // 箱型
-    cntrHint: '', // 反查成功后的贝位提示
-    forkliftInfo: null // 这块场区负责的叉车
+    forkliftInfo: null, // 这块场区负责的叉车
+    distanceText: '计算中' // 从当前位置沿路线到贝位还有多远
   },
 
   /** 从全局取出刚选的贝位；没有就退回去 */
@@ -55,12 +40,30 @@ Page({
     this.setData({
       ...selection,
       target,
-      yardName: user.currentCyName || user.yardName || '',
-      workTypeLabel: DEFAULT_WORK_TYPES[0].label,
-      needCntrNo: DEFAULT_WORK_TYPES[0].needCntr
+      yardName: user.currentCyName || user.yardName || ''
     })
-    this.loadTaskOptions() // 拉作业类型
     this.loadForkliftInfo(target && target.blockId) // 拉这块场区的叉车
+    this.loadDistance(target && target.id) // 算当前位置到贝位的路线距离
+  },
+
+  /** 用当前位置预览一次路线，显示到贝位的真实行驶距离；取不到就显示 -- */
+  async loadDistance(targetId) {
+    if (!targetId) {
+      this.setData({ distanceText: '--' })
+      return
+    }
+    try {
+      const location = await locationUtil.getCurrentLocation()
+      const route = await request({
+        url: '/navigation/mobile/preview',
+        method: 'POST',
+        data: { targetId, longitude: location.longitude, latitude: location.latitude }
+      })
+      const meters = Number(route && route.distanceMeters)
+      this.setData({ distanceText: Number.isFinite(meters) && meters > 0 ? `${Math.round(meters)} 米` : '--' })
+    } catch (error) {
+      this.setData({ distanceText: '--' })
+    }
   },
 
   /** 按场区查负责的叉车，给司机看联系谁 */
@@ -74,89 +77,6 @@ Page({
       this.setData({ forkliftInfo: (forklifts && forklifts.length) ? forklifts[0] : null })
     } catch (error) {
       this.setData({ forkliftInfo: null })
-    }
-  },
-
-  /** 拉后台配置的作业类型；拉不到就用默认四种 */
-  async loadTaskOptions() {
-    try {
-      const workTypes = await request({ url: '/navigation/mobile/work-types' })
-      const workTypeOptions = (workTypes || [])
-        .map(item => ({
-          value: item.value,
-          label: item.label || item.value,
-          needCntr: item.needCntr !== false
-        }))
-        .filter(item => item.value)
-      if (workTypeOptions.length) {
-        this.setData({
-          workTypeOptions,
-          workTypeIndex: 0,
-          workTypeLabel: workTypeOptions[0].label,
-          needCntrNo: !!workTypeOptions[0].needCntr
-        })
-      }
-    } catch (error) {
-      // 拉不到就沿用默认四种作业类型
-    }
-  },
-
-  /** 换了作业类型：提空/提重要箱号，还空/还重可以不填 */
-  onWorkTypeChange(event) {
-    const workTypeIndex = Number(event.detail.value)
-    const work = this.data.workTypeOptions[workTypeIndex]
-    this.setData({
-      workTypeIndex,
-      workTypeLabel: work.label,
-      needCntrNo: work.needCntr,
-      cntrHint: work.needCntr ? this.data.cntrHint : '', // 不需要箱号就清提示
-      cntrSize: work.needCntr ? this.data.cntrSize : ''
-    })
-  },
-
-  /** 输入箱号，自动转大写 */
-  onCntrInput(event) {
-    this.setData({ cntrNo: (event.detail.value || '').trim().toUpperCase() })
-  },
-
-  /** 按箱号反查贝位，提空时常用 */
-  async lookupCntr() {
-    if (this.data.lookingUp) return
-    const cntrNo = this.data.cntrNo
-    if (!cntrNo || cntrNo.length < 4) {
-      wx.showToast({ title: '请输入完整箱号', icon: 'none' })
-      return
-    }
-    this.setData({ lookingUp: true })
-    try {
-      const result = await request({
-        url: `/navigation/mobile/containers/${encodeURIComponent(cntrNo)}`
-      })
-      const target = result.target || result // 箱子所在贝位
-      const patch = {
-        cntrHint: `已定位到 ${displayAreaText(target.blockName || '')} · ${target.slot || ''}贝`,
-        cntrSize: result.cntrSize || target.cntrSize || ''
-      }
-      // 后台给了贝位就换成这个目的地
-      if (target && target.id) {
-        patch.target = {
-          ...target,
-          targetName: displayAreaText(target.targetName),
-          blockName: displayAreaText(target.blockName)
-        }
-      }
-      // 箱子带了船公司就记下，开导航时随任务上报
-      patch.carrierCode = result.carrierCode ? String(result.carrierCode).toUpperCase() : ''
-      this.setData(patch)
-      if (target && target.blockId) {
-        this.loadForkliftInfo(target.blockId)
-      }
-      wx.showToast({ title: '已反显贝位', icon: 'success' })
-    } catch (error) {
-      this.setData({ cntrHint: '' })
-      wx.showToast({ title: error.message || '未找到该箱', icon: 'none' })
-    } finally {
-      this.setData({ lookingUp: false })
     }
   },
 
@@ -176,11 +96,6 @@ Page({
           targetId: this.data.target.id, // 目的贝位
           sourceType: this.data.sourceType, // 手动或扫码
           purpose: 'job', // 作业导航
-          workType: this.data.workTypeOptions[this.data.workTypeIndex].value,
-          workTypeLabel: this.data.workTypeLabel,
-          carrierCode: this.data.carrierCode || '',
-          cntrNo: this.data.cntrNo || '',
-          cntrSize: this.data.cntrSize || '',
           cntrCondition: '好箱',
           longitude: location.longitude,
           latitude: location.latitude,
