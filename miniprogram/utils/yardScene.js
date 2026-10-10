@@ -497,7 +497,7 @@ function createYardScene(canvas, width, height, dpr) {
       const ctx = canvas.getContext('2d') // 2d 画笔
       ctx.clearRect(0, 0, w, h) // 先擦干净
       if (plate) {
-        ctx.fillStyle = 'rgba(255,255,255,0.94)' // 半透明白底板
+        ctx.fillStyle = option.plateColor || 'rgba(255,255,255,0.94)' // 默认半透明白底板，目标场区换成蓝底
         const r = 8 // 圆角半径
         ctx.beginPath()
         ctx.moveTo(r, 4) // 上边左圆角后
@@ -933,6 +933,62 @@ function createYardScene(canvas, width, height, dpr) {
    * 有箱的格子才立一个彩色箱块，高度按实际堆放层数，空箱位只留格线。
    */
   /** 遍历全部箱区画地坪和箱子；某个区报错只打日志，不拖垮整张图 */
+  /** 场图米制点到线段的距离 */
+  function pointSegDist(px, py, a, b) {
+    const dx = b.x - a.x
+    const dy = b.y - a.y
+    const len2 = dx * dx + dy * dy
+    const t = len2 < 1e-8 ? 0 : Math.max(0, Math.min(1, ((px - a.x) * dx + (py - a.y) * dy) / len2))
+    return Math.hypot(px - (a.x + t * dx), py - (a.y + t * dy))
+  }
+
+  /**
+   * 场区哪一侧挨着路：0 是 1 排那侧，1 是大排那侧。
+   * 场区背靠背时小排朝里、没有路，贝号和区名要写在有路的那侧司机才看得到；
+   * 只认走向和贝向一致的路（穿区路不算），两侧都没有就返回 null。
+   */
+  function roadSideOfBlock(corners) {
+    const roads = (state.map && state.map.roads) || []
+    const bx = corners.se[0] - corners.sw[0] // 贝向
+    const by = corners.se[1] - corners.sw[1]
+    const bayLen = Math.hypot(bx, by)
+    const widthM = Math.hypot(corners.nw[0] - corners.sw[0], corners.nw[1] - corners.sw[1])
+    if (bayLen < 1e-6 || widthM < 1e-6) return null
+    const out = 6 / widthM // 往场区外让 6 米再量，归一化到排向比例
+    const sideDist = v => {
+      let best = Infinity
+      ;[0.15, 0.5, 0.85].forEach(u => {
+        const p = lerp2(lerp2(corners.sw, corners.se, u), lerp2(corners.nw, corners.ne, u), v)
+        roads.forEach(road => {
+          const path = (road.path || []).map(xyOf).filter(Boolean)
+          for (let i = 0; i < path.length - 1; i += 1) {
+            const sx = path[i + 1].x - path[i].x
+            const sy = path[i + 1].y - path[i].y
+            const segLen = Math.hypot(sx, sy)
+            if (segLen < 1e-6 || Math.abs(sx * bx + sy * by) / (segLen * bayLen) < 0.866) continue // 与贝向夹角超 30° 不算
+            best = Math.min(best, pointSegDist(p[0], p[1], path[i], path[i + 1]))
+          }
+        })
+      })
+      return best
+    }
+    const low = sideDist(-out)
+    const high = sideDist(1 + out)
+    if (Math.min(low, high) > 25) return null // 两侧 25 米内都没有顺向路
+    return low <= high ? 0 : 1
+  }
+
+  /** 目标贝位占第几格：奇数贝一格，偶数大贝跨前后两格 */
+  function targetCellRange(block, slot) {
+    const n = parseInt(String(slot), 10)
+    const slots = Math.max(block.slotCount || 1, 1)
+    if (!n || n < 1) return null
+    const from = n % 2 === 1 ? (n + 1) / 2 : n / 2
+    const to = n % 2 === 1 ? from : from + 1
+    if (from < 1 || to > slots) return null
+    return { from, to }
+  }
+
   function buildBlocksClean(blocks, targetBlockId, targetSlot) {
     ;(blocks || []).forEach(block => { // 逐个箱区画，单个失败不影响其它区
       try {
@@ -955,9 +1011,14 @@ function createYardScene(canvas, width, height, dpr) {
       }
       const slots = Math.max(block.slotCount || 1, 1) // 贝数，至少 1
       const rows = Math.max(block.rowCount || 1, 1) // 排数
-      const palette = block.isSafetyArea
+      const isTarget = targetBlockId != null && String(block.blockId) === String(targetBlockId) // 正在去的场区
+      const basePalette = block.isSafetyArea
         ? { label: '#166534', deck: 0xc7ebd6, grid: 0x7a9a86 }
         : blockPalette(block) // 验箱区用淡绿地坪，其它区按代号配色
+      const palette = isTarget && !block.isSafetyArea
+        ? Object.assign({}, basePalette, { deck: 0xbcd4f6 }) // 目标场区地坪换浅蓝，一眼能和旁边场区分开
+        : basePalette
+      const roadSide = roadSideOfBlock(corners) // 挨路的一侧，贝号和区名都写这边
 
       // 不按长短边猜贝向：后端多边形第 0→1 角就是 01 贝往后排的方向（已含旋转和长度正负），
       // GM/LY 这种贝沿短边、从右往左排的区，猜长边会把贝画成上下走向
@@ -1007,6 +1068,23 @@ function createYardScene(canvas, width, height, dpr) {
       }
       }
 
+      const targetCells = isTarget && !block.isSafetyArea ? targetCellRange(block, targetSlot) : null
+      if (targetCells) {
+        // 目标贝整列铺橙色，并向有路的一侧多伸出一截，箱子堆满时也能从路上看到
+        const u0 = (targetCells.from - 1) / slots
+        const u1 = targetCells.to / slots
+        const v0 = roadSide === 0 ? -0.06 : 0
+        const v1 = roadSide === 1 ? 1.06 : 1
+        const a = cornerAt(corners, u0, v0)
+        const b = cornerAt(corners, u1, v0)
+        const c = cornerAt(corners, u0, v1)
+        const center = cornerAt(corners, (u0 + u1) / 2, (v0 + v1) / 2)
+        const strip = makeUnlitBox(Math.max(a.distanceTo(c), 1), 0.06, Math.max(a.distanceTo(b), 1) * 0.94, 0xf59e0b)
+        strip.position.set(center.x, 0.19, center.z)
+        strip.rotation.y = Math.atan2(b.x - a.x, b.z - a.z)
+        mapGroup.add(strip)
+      }
+
       stacks.forEach(stack => { // 有箱才立彩色箱块
         if (block.isSafetyArea) return
         const ri = normalizeCellIndex(stack.rowIndex, rows) // 排号归一到 1..rows
@@ -1043,17 +1121,21 @@ function createYardScene(canvas, width, height, dpr) {
       })
 
       if (!block.isSafetyArea) {
-      const outDir = Number(block.outDirection) // 通道在哪一侧，贝位号写在靠路那边
-      const roadOnLowV = outDir === 2 || outDir === 0 || Number.isNaN(outDir)
+      const outDir = Number(block.outDirection) // 找不到挨路的一侧时，退回按提箱方向猜
+      const roadOnLowV = roadSide != null
+        ? roadSide === 0
+        : (outDir === 2 || outDir === 0 || Number.isNaN(outDir))
       const vMark = roadOnLowV ? -0.058 : 1.058 // 略伸出地坪外，写在路边
       for (let i = 1; i <= slots; i += 1) {
         if (corridor && i >= corridor.fromIdx && i <= corridor.toIdx) continue
         const slotNo = String(i * 2 - 1).padStart(2, '0') // 小贝号 01/03/05...
         const mark = cornerAt(corners, (i - 0.5) / slots, vMark) // 该贝路边中点
-        const spriteBay = makeTextSprite(slotNo, '#111827', {
+        const isTargetBay = targetCells && i >= targetCells.from && i <= targetCells.to
+        const spriteBay = makeTextSprite(slotNo, isTargetBay ? '#ffffff' : '#111827', {
           scaleX: 5.6,
           scaleY: 1.42,
-          plate: false, // 贝位号不带白底板，避免挡路
+          plate: Boolean(isTargetBay), // 普通贝号不带底板避免挡路，目标贝号加橙底
+          plateColor: '#ea580c',
           fixed: true, // 不随相机缩放，近看才清楚
           font: 'bold 32px sans-serif'
         })
@@ -1064,13 +1146,28 @@ function createYardScene(canvas, width, height, dpr) {
       }
       }
 
-      const baseCenter = cornerAt(corners, 0.5, 0.5)
       const labelText = block.isSafetyArea ? '验箱区' : shortBlockLabel(block)
-      const sprite = makeTextSprite(labelText, palette.label, { scaleX: 10, scaleY: 2.5 })
-      if (sprite) {
-        sprite.position.set(baseCenter.x, CNTR_LAYER_H * maxFloor + 3.2, baseCenter.z) // 挂在最高箱之上
-        mapGroup.add(sprite)
+      const labelOpts = isTarget && !block.isSafetyArea
+        ? { scaleX: 12, scaleY: 3, plateColor: '#1d4ed8' } // 目标场区蓝底白字
+        : { scaleX: 12, scaleY: 3 }
+      const labelColor = isTarget && !block.isSafetyArea ? '#ffffff' : palette.label
+      // 大场区一个区名放中间，跟车放大时常常不在画面里：沿挨路一侧每隔约 10 个贝再写一个
+      const labelV = block.isSafetyArea || roadSide == null ? 0.5 : (roadSide === 0 ? 0.18 : 0.82)
+      const labelSlots = []
+      if (block.isSafetyArea || slots <= 12) {
+        labelSlots.push((slots + 1) / 2)
+      } else {
+        for (let i = 5; i <= slots; i += 10) labelSlots.push(i)
       }
+      labelSlots.forEach(i => {
+        if (corridor && i >= corridor.fromIdx && i <= corridor.toIdx) return // 穿区路上不写
+        const at = cornerAt(corners, (i - 0.5) / slots, labelV)
+        const sprite = makeTextSprite(labelText, labelColor, labelOpts)
+        if (sprite) {
+          sprite.position.set(at.x, CNTR_LAYER_H * maxFloor + 3.2, at.z) // 挂在最高箱之上
+          mapGroup.add(sprite)
+        }
+      })
       addSafetyGates(block)
   }
 
