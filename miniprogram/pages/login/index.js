@@ -6,6 +6,19 @@ const request = require('../../utils/request')
 const auth = require('../../utils/auth')
 const collabUnread = require('../../utils/collabUnread')
 
+const LAST_PLATE_KEY = 'nav_last_plate' // 本机上次登录的车牌，微信识别没回来前先顶上
+const LAST_YARD_KEY = 'nav_last_cy_id' // 本机上次登录的堆场
+
+/** 用 wx.login 拿一次性 code；拿不到就算了，不影响手动登录 */
+function wxLoginCode() {
+  return new Promise(resolve => {
+    wx.login({
+      success: res => resolve(res.code || ''),
+      fail: () => resolve('')
+    })
+  })
+}
+
 /** 登录成功后切到首页（底部「导航/协同」那一栏） */
 function switchToHome() {
   return new Promise((resolve, reject) => {
@@ -30,6 +43,7 @@ Page({
     yardIndex: -1, // 司机选中了第几个堆场，-1 表示还没选
     yardName: '', // 选中堆场的显示名
     yardsLoadError: '', // 堆场名单没拉下来时的原因
+    prefillHint: '', // 自动填了上次车牌时给司机的提示
     userAccount: '', // 现场人员账号
     password: '', // 现场人员密码
     submitting: false, // 正在登录，用来转圈、防止连点
@@ -47,8 +61,53 @@ Page({
       wx.switchTab({ url: '/pages/home/index' })
       return
     }
-    // 还没登录，先把堆场下拉准备好
-    this.loadYards()
+    // 先用本机记的车牌顶上，不用等网络
+    const localPlate = wx.getStorageSync(LAST_PLATE_KEY) || ''
+    if (localPlate) {
+      this.setData({ plateNumber: localPlate, prefillHint: '已自动填入上次使用的车牌，换车请修改' })
+    }
+    // 堆场名单和微信识别一起问，都回来后再把上次的车牌、堆场填上
+    Promise.all([this.loadYards(), this.identifyWechat()]).then(([, identity]) => {
+      this.applyPrefill(identity)
+    })
+  },
+
+  /** 凭微信身份问后台：这个微信上次用的车牌和堆场；失败返回空，司机手动填 */
+  async identifyWechat() {
+    const code = await wxLoginCode()
+    if (!code) return null
+    try {
+      const identity = await request({
+        url: '/navigation/auth/wx-identify', // 公开接口，不用先登录
+        method: 'POST',
+        data: { code },
+        skipUnauthorizedRedirect: true
+      })
+      this.wxTicket = (identity && identity.wxTicket) || '' // 登录时带上，后台才能记住本次车牌
+      return identity || null
+    } catch (error) {
+      console.warn('[login] 微信识别失败，改为手动填写', error.message)
+      return null
+    }
+  },
+
+  /** 把上次的车牌和堆场填进去；后台记录优先，本机记录兜底，司机已经在改就不动车牌 */
+  applyPrefill(identity) {
+    const plate = (identity && identity.plateNumber) || ''
+    if (plate && !this.plateEdited) {
+      this.setData({ plateNumber: plate, prefillHint: '已自动填入上次使用的车牌，换车请修改' })
+    }
+    const cyId = (identity && identity.lastCyId) || wx.getStorageSync(LAST_YARD_KEY)
+    this.selectYardById(cyId)
+  },
+
+  /** 按堆场编号选中下拉项；名单里没有（已停用）就保持默认 */
+  selectYardById(cyId) {
+    if (!cyId) return
+    const yards = this.data.yards || []
+    const index = yards.findIndex(item => String(item.id) === String(cyId)) // id 是长整型，按字符串比
+    if (index < 0) return
+    this.setData({ yardIndex: index, yardName: yards[index].cyName || '' })
   },
 
   /** 向后台要启用中的堆场名单，给司机下拉选 */
@@ -97,7 +156,8 @@ Page({
 
   /** 司机在改车牌 */
   onPlateInput(event) {
-    this.setData({ plateNumber: event.detail.value.trim() }) // 去掉首尾空格
+    this.plateEdited = true // 司机动过车牌，微信识别晚回来也不覆盖
+    this.setData({ plateNumber: event.detail.value.trim(), prefillHint: '' }) // 去掉首尾空格
   },
 
   /** 司机在下拉里选了堆场 */
@@ -146,11 +206,14 @@ Page({
       const user = await request({
         url: '/navigation/auth/driver-login',
         method: 'POST',
-        data: { plateNumber, cyId: yard.id }, // 车牌和堆场编号
+        data: { plateNumber, cyId: yard.id, wxTicket: this.wxTicket || '' }, // 车牌、堆场编号、微信票据
         skipUnauthorizedRedirect: true // 账密错不要跳登录死循环
       })
       auth.setSession(user) // 把令牌和用户记到手机
       getApp().globalData.user = user // 同步到全局，首页马上能用
+      this.wxTicket = '' // 票据后台已用掉
+      wx.setStorageSync(LAST_PLATE_KEY, user.plateNumber || plateNumber) // 下次打开先填上
+      wx.setStorageSync(LAST_YARD_KEY, yard.id)
       collabUnread.start()
       await switchToHome() // 进首页
     } catch (error) {

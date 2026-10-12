@@ -26,7 +26,7 @@ function getDeviceId() {
 /** 登录、取堆场列表这类公开接口不需要带令牌 */
 function isPublicAuth(url) {
   // 匹配登录和堆场列表这几个不用登录就能访问的地址
-  return /^\/navigation\/auth\/(yards|driver-login|login)(\?|$)/.test(url || '')
+  return /^\/navigation\/auth\/(yards|driver-login|login|wx-identify)(\?|$)/.test(url || '')
 }
 
 /** 发一次后台请求；成功返回业务数据，失败抛出中文错误给页面提示 */

@@ -151,6 +151,13 @@ page {
 }
 
 /* 堆场名单失败时的橙色原因 */
+.prefill-hint {
+  margin: -16rpx 0 20rpx;
+  color: #2563eb;
+  font-size: 22rpx;
+  line-height: 1.5;
+}
+
 .yards-error {
   margin: -16rpx 0 20rpx;
   color: #b45309;

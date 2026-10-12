@@ -22,6 +22,8 @@
     <block wx:if="{{loginKind === 'driver'}}">
       <view class="field-label">车牌号</view>
       <input class="field-input" maxlength="20" placeholder="请输入当前进场车辆的车牌号[如:沪A12345]" value="{{plateNumber}}" bindinput="onPlateInput" />
+      <!-- 自动填了上次的车牌时提醒司机核对 -->
+      <view class="prefill-hint" wx:if="{{prefillHint}}">{{prefillHint}}</view>
       <view class="field-label">堆场</view>
       <picker mode="selector" range="{{yardNames}}" value="{{yardIndex >= 0 ? yardIndex : 0}}" bindchange="onYardChange" disabled="{{!yardNames.length}}">
         <view class="field-input picker-value {{yardName ? '' : 'placeholder'}}">{{yardName || (yardNames.length ? '请选择堆场' : '堆场列表为空')}}</view>
