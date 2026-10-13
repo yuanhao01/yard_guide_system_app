@@ -4,6 +4,7 @@
  */
 const auth = require('./utils/auth')
 const collabUnread = require('./utils/collabUnread')
+const features = require('./utils/features')
 
 // 字面量路径给微信打包器用，真机才会带上 GLB；不要改成变量拼接
 void '/models/truck.glb'
@@ -23,6 +24,8 @@ App({
   onShow() {
     if (auth.isLoggedIn()) {
       collabUnread.start()
+      // 后台可能改了模拟定位字典，回前台就同步一次
+      features.refreshQuietly()
     } else {
       collabUnread.stop()
     }

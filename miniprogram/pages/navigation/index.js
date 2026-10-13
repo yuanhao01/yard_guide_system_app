@@ -6,6 +6,7 @@ const config = require('../../config')
 const request = require('../../utils/request')
 const auth = require('../../utils/auth')
 const locationUtil = require('../../utils/location')
+const features = require('../../utils/features')
 const yardScene = require('../../utils/yardScene')
 const voice = require('../../utils/voice')
 const routeInstruction = require('../../utils/routeInstruction')
@@ -564,8 +565,8 @@ Page({
   /** 只读数据字典，页面上不露出任何开关 */
   async loadFeatures() {
     try {
-      const features = await request({ url: '/navigation/mobile/features' })
-      this.truckDragEnabled = Boolean(features && features.truckDragEnabled)
+      const result = await features.refresh() // 顺带刷新模拟定位缓存
+      this.truckDragEnabled = Boolean(result && result.truckDragEnabled)
     } catch (error) {
       this.truckDragEnabled = false
     }

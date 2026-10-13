@@ -7,6 +7,7 @@ const request = require('../../utils/request')
 const auth = require('../../utils/auth')
 const specialNav = require('../../utils/specialNav')
 const collabUnread = require('../../utils/collabUnread')
+const features = require('../../utils/features')
 
 /** 首页「剩余约 xx 米」用哪个数：规划很长但沿路只剩很短时，优先用规划全长，避免刚出发就显示快到了 */
 function remainMetersText(session) {
@@ -214,6 +215,7 @@ Page({
           auth.setSession(Object.assign({}, auth.getUser(), user, { token })) // 合并进本地用户
           getApp().globalData.user = auth.getUser()
           applyUserContext(this)
+          await features.refreshQuietly() // 模拟定位按堆场下发，换堆场要重拿
           await this.refresh() // 换堆场后任务/群都要重拉
         } catch (error) {
           wx.showToast({ title: error.message || '切换失败', icon: 'none' })

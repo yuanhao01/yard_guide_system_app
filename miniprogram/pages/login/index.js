@@ -5,6 +5,7 @@
 const request = require('../../utils/request')
 const auth = require('../../utils/auth')
 const collabUnread = require('../../utils/collabUnread')
+const features = require('../../utils/features')
 
 const LAST_PLATE_KEY = 'nav_last_plate' // 本机上次登录的车牌，微信识别没回来前先顶上
 const LAST_YARD_KEY = 'nav_last_cy_id' // 本机上次登录的堆场
@@ -214,6 +215,7 @@ Page({
       this.wxTicket = '' // 票据后台已用掉
       wx.setStorageSync(LAST_PLATE_KEY, user.plateNumber || plateNumber) // 下次打开先填上
       wx.setStorageSync(LAST_YARD_KEY, yard.id)
+      await features.refreshQuietly() // 进首页前拿到本堆场的模拟定位设置
       collabUnread.start()
       await switchToHome() // 进首页
     } catch (error) {
@@ -244,6 +246,7 @@ Page({
       })
       auth.setSession(user)
       getApp().globalData.user = user
+      await features.refreshQuietly()
       collabUnread.start()
       await switchToHome()
     } catch (error) {

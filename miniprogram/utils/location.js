@@ -1,9 +1,10 @@
 /**
  * 定位：取当前位置、持续跟车、把经纬度整理成后台要的格式。
- * 调试时若 config 里填了固定点，就完全不读手机 GPS。
- * 依赖：config（坐标系、调试点、上报间隔）。
+ * 后台字典 nav_mock_location 给当前堆场配了模拟点时完全不读手机 GPS，开发、体验、正式版一致。
+ * 依赖：config（坐标系、上报间隔）、features（后台下发的模拟点）。
  */
 const config = require('../config')
+const features = require('./features')
 
 /**
  * wx.getLocation 的 type 默认是 wgs84，gcj02 会带上国测局的加密偏移，
@@ -15,10 +16,10 @@ function locationType() {
   return config.coordinateSystem === 'wgs84' ? 'wgs84' : 'gcj02'
 }
 
-/** 调试固定点，见 config.mockLocation；未配置时返回 null 走真实定位。 */
+/** 后台按当前堆场下发的模拟定位点；没有就返回 null 走真实定位 */
 function mockLocation() {
-  // 读出配置里的固定点
-  const mock = config.mockLocation
+  // 读出缓存的模拟点（登录、切堆场、回前台、进导航页时刷新）
+  const mock = features.getCachedMockLocation()
   // 没配经纬度就当没有调试点
   if (!mock || mock.longitude == null || mock.latitude == null) return null
   // 整理成和微信定位一样的结构，后面上报、跟车都能直接用

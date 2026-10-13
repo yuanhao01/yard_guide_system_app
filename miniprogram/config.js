@@ -8,10 +8,10 @@ module.exports = {
    * 开发者工具：详情 → 本地设置 → 勾选「不校验合法域名、web-view、TLS…」。
    * 真机调试：手机与电脑同一 Wi-Fi；Windows 防火墙放行 19207；后端需已启动且能连上 local 里的 MySQL/Redis。
    */
-  apiBaseUrl: 'https://dct.hturing.com/guide',
-  wsBaseUrl: 'wss://dct.hturing.com/guide',
-  // apiBaseUrl: 'http://10.196.1.137:19207/guide',
-  // wsBaseUrl: 'wss://10.196.1.137:19207/guide',
+  // apiBaseUrl: 'https://dct.hturing.com/guide',
+  // wsBaseUrl: 'wss://dct.hturing.com/guide',
+  apiBaseUrl: 'http://10.196.1.138:19207/guide',
+  wsBaseUrl: 'wss://10.196.1.138:19207/guide',
 
   /**
    * 高精度模型的下载地址。小程序主包上限 2MB，集卡高模单个就 1.5MB+，
@@ -23,8 +23,8 @@ module.exports = {
    * 正式发布改成 https 域名，并在公众平台配置 downloadFile 合法域名。
    * 置空则完全禁用远端模型，只用包内低模。
    */
-  modelBaseUrl: 'https://dct.hturing.com/models',
-  // modelBaseUrl: 'http://10.196.1.137:19207/models',
+  // modelBaseUrl: 'https://dct.hturing.com/models',
+  modelBaseUrl: 'http://10.196.1.138:19207/models',
   // 导航页本地跟车已是 onLocationChange（约 1Hz）；这里是上报后端的间隔，对齐 WTRTK 1Hz
   locationReportIntervalMs: 1000,
 
@@ -39,28 +39,4 @@ module.exports = {
    * 自绘 canvas 堆场图不依赖任何地图底图，不存在为了对齐底图而用 GCJ-02 的理由。
    */
   coordinateSystem: 'wgs84',
-
-  /**
-   * 调试用固定定位。填了之后完全不读手机 GPS，一直按这个点上报，
-   * 方便在办公室看场图、车道吸附和路线规划；置 null 即恢复真实定位。
-   *
-   * 经纬度必须和 coordinateSystem 同系（当前 wgs84），
-   * direction 是车头朝向，0 正北、顺时针为正，双向路靠哪侧车道由它决定。
-   *
-   * 鑫三利光明（重画后的路网，WGS-84，1 单位=1 米）：
-   *   南路中段(897,653)     121.6812836, 31.3056040  direction 90    车头朝东
-   *   西路中段(676,604)     121.6789601, 31.3060458  direction 0     车头朝北
-   *   东路中段(1012,604)    121.6824927, 31.3060458  direction 180   车头朝南
-   *   北路中段(835,553)     121.6806318, 31.3065057  direction 270   车头朝西
-   *   中路中段(860,601.5)   121.6808946, 31.3060684  direction 180   车头朝南
-   *   西路南路交口(676,653) 121.6789601, 31.3056040  direction 90
-   *   C1/B1 旁(690,600)    121.6791073, 31.3060819  —— 箱区内，看会不会吸回道路
-   *
-   * speed 是米/秒（和微信 GPS 一样），不是公里/时。15km/h 限速对应 4.2。
-   * 测超速用 8（约 29km/h）；测「我已到达」请改成 0，否则后台认为车还在开。
-   */
-  // mockLocation: null
-  // mockLocation: { longitude: 121.690964, latitude: 31.308906, direction: 90, speed: 8 } // 鑫三利 南路中段；speed 单位 m/s，8≈29km/h 用来测超速
-    mockLocation: { longitude: 121.6882218, latitude: 31.3044438, direction: 90, speed: 8 } // 鑫三利 南路中段；speed 单位 m/s，8≈29km/h 用来测超速
-
 }

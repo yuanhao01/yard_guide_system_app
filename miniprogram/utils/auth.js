@@ -6,6 +6,8 @@
 const TOKEN_KEY = 'satoken'
 // 当前登录用户资料在手机里的存放名字
 const USER_KEY = 'navigation_user'
+// 后台按当前堆场下发的模拟定位点（见 utils/features.js），换人、换堆场都要清
+const MOCK_LOCATION_KEY = 'navigation_mock_location'
 
 /** 取出当前登录令牌，没有登录就返回空字符串 */
 function getToken() {
@@ -27,6 +29,8 @@ function clearSession() {
   wx.removeStorageSync(TOKEN_KEY)
   // 删掉用户资料
   wx.removeStorageSync(USER_KEY)
+  // 删掉上一个人所在堆场的模拟定位点
+  wx.removeStorageSync(MOCK_LOCATION_KEY)
 }
 
 /** 取出当前登录用户；没登录返回空 */
@@ -69,6 +73,7 @@ function canSwitchYard() {
 
 // 给各页面用的登录相关方法
 module.exports = {
+  MOCK_LOCATION_KEY, // 模拟定位缓存名，features.js 读写
   clearSession, // 退出时清本地登录态
   getToken, // 取令牌给请求带头
   getUser, // 取当前用户资料
