@@ -13,6 +13,9 @@ const routeInstruction = require('../../utils/routeInstruction')
 const headingSensor = require('../../utils/heading')
 const yardSocket = require('../../utils/yardSocket')
 
+// 离最近道路超过这么多米算场外，和后端 RoutePlanner.OFF_YARD_METERS 一致
+const OFF_YARD_METERS = 500
+
 /**
  * 从转向文案里挑一个箭头，和高保真 02 屏的提示条一致。
  */
@@ -32,6 +35,10 @@ function remainingAlongRoute(self, points, blocks) {
 
 /** 优先用场图上已画蓝线报下一句，没有再按规划折线 */
 function pickLocalInstruction(page, targetName, fallback) {
+  // 路线从闸口起算、人还在场外：按车位置算会报「直行几十万米」，用后台给的闸口起第一句
+  if (page.routeFromGate && offYardOfRoute(page) > OFF_YARD_METERS) {
+    return displayAreaText(fallback || '沿推荐路线行驶')
+  }
   const painted = page.scene && page.scene.getPaintedRoute && page.scene.getPaintedRoute()
   const selfWorld = page.scene && page.scene.getSelfWorld && page.scene.getSelfWorld()
   const fromPainted = painted
@@ -41,6 +48,14 @@ function pickLocalInstruction(page, targetName, fallback) {
   const blocks = page.yardMapData && page.yardMapData.blocks
   const local = routeInstruction.describeNextInstruction(page.self, page.routePoints, targetName, blocks)
   return displayAreaText(local || fallback || '沿推荐路线行驶')
+}
+
+/** 车离规划起点多远（米）；没车或没线返回 0 */
+function offYardOfRoute(page) {
+  const p0 = page.routePoints && page.routePoints[0]
+  return page.self && p0 && page.self.x != null && p0.x != null
+    ? Math.hypot(page.self.x - p0.x, page.self.y - p0.y)
+    : 0
 }
 
 /** 挑一个给司机看的剩余米数：车还在另一条路时不能用短折线报「即将到达」 */
@@ -59,6 +74,8 @@ function pickRemainingMeters(page, session, route) {
   const toTarget = page.self && page.targetPoint
     ? Math.hypot(page.self.x - page.targetPoint.x, page.self.y - page.targetPoint.y)
     : 0 // 车离目的地直线距离
+  // 路线从闸口起算、人还在场外：报闸口到目的地的全程，不报几百公里
+  if (page.routeFromGate && gapToRoute > OFF_YARD_METERS && planned > 0) return planned
   // 车还在另一条路上、折线只剩终点 4 米时，不能用这段短线报剩余/即将到达
   if (gapToRoute > 25 && toTarget > 25) {
     return Math.max(along, toTarget, 1)
@@ -131,6 +148,8 @@ function maybeForceRerouteIfRoadMismatch(page) {
   const p0 = page.routePoints && page.routePoints[0]
   if (!roads || !page.self || !p0) return
   const selfSnap = yardScene.snapPositionToRoad(roads, page.self.x, page.self.y)
+  // 路线从闸口起算、人还在场外：本来就不在路线那条路上，不能每次都要求重算
+  if (page.routeFromGate && selfSnap.distM != null && selfSnap.distM > OFF_YARD_METERS) return
   const routeSnap = yardScene.snapPositionToRoad(roads, p0.x, p0.y)
   const selfKey = selfSnap.road && (selfSnap.road.edgeCode || selfSnap.road.name)
   const routeKey = routeSnap.road && (routeSnap.road.edgeCode || routeSnap.road.name)
@@ -138,6 +157,20 @@ function maybeForceRerouteIfRoadMismatch(page) {
     page._forceRerouteOnce = true
     console.log('[nav-plan] roadMismatch', JSON.stringify({ selfRoad: selfKey, routeP0Road: routeKey }))
   }
+}
+
+/** 规划时人在场外、路线改从闸口起算：每次导航只弹一次 */
+function maybeShowOffYardModal(page, route) {
+  if (!route || !route.startFromGate || page._offYardModalShown) return
+  page._offYardModalShown = true
+  const off = Number(route.offYardMeters)
+  const away = !off ? '' : `（距离约 ${off >= 1000 ? (off / 1000).toFixed(1) + ' 公里' : Math.round(off) + ' 米'}）`
+  wx.showModal({
+    title: '当前不在堆场内',
+    content: `当前位置不在堆场内${away}，路线从闸口开始规划，进入堆场后自动跟车。`,
+    showCancel: false,
+    confirmText: '知道了'
+  })
 }
 
 /** 从转向文案里挑提示条左边的箭头 */
@@ -398,6 +431,8 @@ Page({
     const target = (route && route.target) || this.targetPoint || points[points.length - 1]
     this.routePoints = points || []
     if (route) this.routeLaneOffset = Boolean(route.laneOffsetApplied)
+    if (route) this.routeFromGate = Boolean(route.startFromGate)
+    maybeShowOffYardModal(this, route)
     this.targetPoint = target && target.x != null && target.y != null
       ? { x: Number(target.x), y: Number(target.y) }
       : null

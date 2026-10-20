@@ -32,6 +32,8 @@ const DEFAULT_PITCH = FLAT_PITCH
 const MIN_DISTANCE = 40
 /** 相机最远距离（米），再远场区会缩成一小块 */
 const MAX_DISTANCE = 900
+// 车离蓝线超过这么多米算还在场外，和后端 RoutePlanner.OFF_YARD_METERS 一致：不按车位置裁线
+const OFF_YARD_METERS = 500
 
 /** 把俯仰角限制在允许范围内，避免相机翻到地下或过度侧视 */
 function clampPitch(pitch) {
@@ -1734,6 +1736,7 @@ function createYardScene(canvas, width, height, dpr) {
     const truck = selfWorld() || selfOnRoadPos() // 本车世界坐标
     const chosen = pickRouteProgress(points, truck) // 该从哪一段接上
     if (!chosen) return points
+    if (chosen.dist > OFF_YARD_METERS) return points // 人还在场外（路线从闸口起算），整条线都画
     const segA = points[chosen.index]
     const segB = points[chosen.index + 1]
     const onSameRoad = segmentOnTruckRoad(segA, segB, truck)
