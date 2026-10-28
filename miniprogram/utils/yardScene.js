@@ -2616,6 +2616,28 @@ function createYardScene(canvas, width, height, dpr) {
     return next
   }
 
+  /**
+   * 抓住地图拖：让手指按下时底下的那块地，松手前一直留在手指下面。
+   * 按屏幕点反投影到地面算位移，斜视时近处、远处都跟手；反投影失败（指到天上）退回按像素估算。
+   */
+  function panByScreen(fromX, fromY, toX, toY) {
+    const view = state.userView || state.view
+    const a = screenToYard(fromX, fromY)
+    const b = screenToYard(toX, toY)
+    if (a && b) {
+      const moveX = a.x - b.x
+      const moveY = a.y - b.y
+      // 贴近地平线时一像素能差出几十米，太大就不信
+      const limit = (view.distance * 0.0018 + 0.08) * Math.max(Math.hypot(toX - fromX, toY - fromY), 1) * 6
+      if (Math.hypot(moveX, moveY) <= limit) {
+        const next = snapshotView(view, { centerX: view.centerX + moveX, centerY: view.centerY + moveY })
+        setUserView(next)
+        return next
+      }
+    }
+    return pan(toX - fromX, toY - fromY)
+  }
+
   /** 双指捏合缩放：factor>1 拉近，距离夹在最小/最大之间 */
   function zoom(factor) {
     const view = state.userView || state.view
@@ -2627,12 +2649,12 @@ function createYardScene(canvas, width, height, dpr) {
 
   /**
    * 高德式倾斜：双指同向上/下滑。
-   * deltaY > 0（手指下移）→ 更侧视（俯仰变小）；上移 → 更俯视。
+   * deltaY < 0（手指上推）→ 更侧视（俯仰变小，立体）；下拉 → 更俯视（回到平面）。
    */
   function tilt(deltaYPx) {
     if (!deltaYPx) return state.userView || state.view // 没滑就原样返回
     const view = state.userView || state.view
-    const pitch = clampPitch(currentPitch(view) - deltaYPx * (Math.PI / 180) * 0.32) // 下移减俯仰=更侧视
+    const pitch = clampPitch(currentPitch(view) + deltaYPx * (Math.PI / 180) * 0.32) // 上推减俯仰=更侧视
     const next = snapshotView(view, { pitch })
     setUserView(next)
     return next
@@ -2645,7 +2667,8 @@ function createYardScene(canvas, width, height, dpr) {
   function rotate(deltaAngle) {
     if (!deltaAngle) return state.userView || state.view
     const view = state.userView || state.view
-    let bearing = currentBearing(view) - deltaAngle // 手指顺时针拧，地图顺时针转
+    // bearing 变大相机绕到东侧，屏幕上看地图是顺时针转；手指顺时针拧时 deltaAngle 为正
+    let bearing = currentBearing(view) + deltaAngle
     // 归一化到 (-π, π]
     bearing = ((bearing + Math.PI) % (Math.PI * 2) + Math.PI * 2) % (Math.PI * 2) - Math.PI
     const next = snapshotView(view, { bearing })
@@ -2945,6 +2968,7 @@ function createYardScene(canvas, width, height, dpr) {
     enableFollow, // 回到跟车
     setUserView, // 写入手势视角
     pan, // 拖
+    panByScreen, // 抓住地图拖（按反投影跟手）
     zoom, // 捏合
     tilt, // 倾斜
     rotate, // 拧

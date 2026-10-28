@@ -204,6 +204,9 @@ function touchAngle(touches) {
   return Math.atan2(touches[1].y - touches[0].y, touches[1].x - touches[0].x)
 }
 
+/** 双指拧过这么多才开始转地图，捏合缩放时手指的小幅歪斜不会带着转（约 12°） */
+const ROTATE_START_RAD = 12 * Math.PI / 180
+
 /** 转角收到正负半圈 */
 function normalizeAngleDelta(delta) {
   while (delta > Math.PI) delta -= Math.PI * 2
@@ -669,6 +672,9 @@ Page({
       this.pinchDistance = touchDistance(touches)
       this.pinchMid = touchMidpoint(touches)
       this.pinchAngle = touchAngle(touches)
+      this.pinchTouches = [{ y: touches[0].y }, { y: touches[1].y }]
+      this.rotateAccum = 0
+      this.rotateUnlocked = false
       this.panLast = null
     } else if (touches.length === 1) {
       this.panLast = { x: touches[0].x, y: touches[0].y }
@@ -686,7 +692,10 @@ Page({
     }
   },
 
-  /** 手指移动：双指缩放/旋转/俯仰，单指拖场图 */
+  /**
+   * 手指移动，手势和高德/系统地图一致：
+   * 单指拖动地图；双指捏合缩放、同时可拖动，拧过约 12° 再转；双指一起上推/下拉调俯仰。
+   */
   onCanvasTouchMove(event) {
     if (!this.scene) return
     const touches = event.touches || []
@@ -699,33 +708,29 @@ Page({
         this.pinchDistance = distance
         this.pinchMid = mid
         this.pinchAngle = angle
+        this.pinchTouches = [{ y: touches[0].y }, { y: touches[1].y }]
+        this.rotateAccum = 0
+        this.rotateUnlocked = false
         return
       }
 
       const dDist = distance - this.pinchDistance
-      const dMidY = mid.y - (this.pinchMid ? this.pinchMid.y : mid.y)
-      const dMidX = mid.x - (this.pinchMid ? this.pinchMid.x : mid.x)
+      const prevMid = this.pinchMid || mid
+      const dMidY = mid.y - prevMid.y
+      const dMidX = mid.x - prevMid.x
       const dAngle = normalizeAngleDelta(angle - (this.pinchAngle != null ? this.pinchAngle : angle))
-      const scaleChange = Math.abs(dDist)
-      const parallelMove = Math.hypot(dMidX, dMidY)
-      const rotateMove = Math.abs(dAngle) * Math.max(distance, 1)
+      const prevTouches = this.pinchTouches || [{ y: touches[0].y }, { y: touches[1].y }]
+      const dy0 = touches[0].y - prevTouches[0].y
+      const dy1 = touches[1].y - prevTouches[1].y
 
-      // 高德：捏合缩放 / 双指拧旋转 / 双指同向上下滑俯仰
+      // 双指一起往同一个方向竖着推才算调俯仰；其余都按「缩放 + 拖动 + 旋转」一起处理
       if (!this.gestureMode) {
-        if (rotateMove > 14 && rotateMove > scaleChange * 1.1 && rotateMove > parallelMove * 0.9) {
-          this.gestureMode = 'rotate'
-        } else if (scaleChange > 10 && scaleChange > parallelMove * 0.85 && scaleChange > rotateMove) {
-          this.gestureMode = 'zoom'
-        } else if (Math.abs(dMidY) > 8 && Math.abs(dMidY) > Math.abs(dMidX) * 1.15 && parallelMove > rotateMove) {
+        const bothVertical = dy0 * dy1 > 0 && Math.abs(dMidY) > 8
+          && Math.abs(dMidY) > Math.abs(dMidX) * 1.5 && Math.abs(dDist) < Math.abs(dMidY) * 0.5
+        if (bothVertical) {
           this.gestureMode = 'tilt'
-        } else if (scaleChange > 4 || parallelMove > 4 || rotateMove > 8) {
-          const scores = [
-            ['rotate', rotateMove],
-            ['zoom', scaleChange],
-            ['tilt', Math.abs(dMidY) > Math.abs(dMidX) ? parallelMove : 0]
-          ]
-          scores.sort((a, b) => b[1] - a[1])
-          this.gestureMode = scores[0][0]
+        } else if (Math.abs(dDist) > 4 || Math.hypot(dMidX, dMidY) > 4 || Math.abs(dAngle) > 0.05) {
+          this.gestureMode = 'transform'
         }
       }
 
@@ -739,27 +744,41 @@ Page({
         })
       }
 
-      if (this.gestureMode === 'zoom') {
-        const factor = distance / this.pinchDistance
-        if (isFinite(factor) && Math.abs(factor - 1) >= 0.008) {
-          this.scene.zoom(factor)
-          markAdjusted()
-        }
-      } else if (this.gestureMode === 'tilt') {
+      if (this.gestureMode === 'tilt') {
         if (Math.abs(dMidY) >= 1) {
           this.scene.tilt(dMidY)
           markAdjusted()
         }
-      } else if (this.gestureMode === 'rotate') {
-        if (Math.abs(dAngle) >= 0.004) {
-          this.scene.rotate(dAngle)
-          markAdjusted()
+      } else if (this.gestureMode === 'transform') {
+        let changed = false
+        const factor = distance / this.pinchDistance
+        if (isFinite(factor) && Math.abs(factor - 1) >= 0.004) {
+          this.scene.zoom(factor)
+          changed = true
         }
+        // 拧够角度才开始转，之后跟手连续转
+        this.rotateAccum += dAngle
+        if (!this.rotateUnlocked && Math.abs(this.rotateAccum) >= ROTATE_START_RAD) {
+          this.rotateUnlocked = true
+          this.scene.rotate(this.rotateAccum)
+          changed = true
+        } else if (this.rotateUnlocked && Math.abs(dAngle) >= 0.002) {
+          this.scene.rotate(dAngle)
+          changed = true
+        }
+        // 两指中点挪动就拖动地图，缩放、旋转时也不会卡住
+        if (Math.hypot(dMidX, dMidY) >= 1) {
+          if (this.scene.panByScreen) this.scene.panByScreen(prevMid.x, prevMid.y, mid.x, mid.y)
+          else this.scene.pan(dMidX, dMidY)
+          changed = true
+        }
+        if (changed) markAdjusted()
       }
 
       this.pinchDistance = distance
       this.pinchMid = mid
       this.pinchAngle = angle
+      this.pinchTouches = [{ y: touches[0].y }, { y: touches[1].y }]
       this.panLast = null
       this.truckGrabbed = false
       return
@@ -783,15 +802,29 @@ Page({
       const dx = touches[0].x - this.panLast.x
       const dy = touches[0].y - this.panLast.y
       if (Math.abs(dx) < 1 && Math.abs(dy) < 1) return
+      const from = this.panLast
       this.panLast = { x: touches[0].x, y: touches[0].y }
-      this.scene.pan(dx, dy)
+      // 按住的那块地跟着手指走
+      if (this.scene.panByScreen) this.scene.panByScreen(from.x, from.y, touches[0].x, touches[0].y)
+      else this.scene.pan(dx, dy)
       if (this.data.followMode || !this.data.viewAdjusted) {
         this.setData({ viewAdjusted: true, followMode: false })
       }
     }
   },
 
-  onCanvasTouchEnd() {
+  /** 抬起手指；双指抬起一指时，剩下那指接着单指拖，不会跳 */
+  onCanvasTouchEnd(event) {
+    const remaining = (event && event.touches) || []
+    if (remaining.length === 1 && !this.dragging) {
+      this.panLast = { x: remaining[0].x, y: remaining[0].y }
+      this.pinchDistance = 0
+      this.pinchMid = null
+      this.pinchAngle = null
+      this.gestureMode = null
+      this.truckGrabbed = false
+      return
+    }
     const shouldReport = this.truckDragEnabled && this.dragging && this.self
     this.panLast = null
     this.pinchDistance = 0
