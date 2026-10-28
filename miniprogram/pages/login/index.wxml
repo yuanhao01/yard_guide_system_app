@@ -21,7 +21,8 @@
     <!-- 司机：车牌 + 堆场 -->
     <block wx:if="{{loginKind === 'driver'}}">
       <view class="field-label">车牌号</view>
-      <input class="field-input" maxlength="20" placeholder="请输入当前进场车辆的车牌号[如:沪A12345]" value="{{plateNumber}}" bindinput="onPlateInput" />
+      <!-- 引导式输入：先选省份，再填字母数字，新能源可多一位 -->
+      <plate-input value="{{plateNumber}}" bind:change="onPlateInput" />
       <!-- 自动填了上次的车牌时提醒司机核对 -->
       <view class="prefill-hint" wx:if="{{prefillHint}}">{{prefillHint}}</view>
       <view class="field-label">堆场</view>

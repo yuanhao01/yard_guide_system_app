@@ -3,5 +3,8 @@
   "navigationBarTextStyle": "white",
   "backgroundColor": "#0c2820",
   "backgroundColorTop": "#0c2820",
-  "backgroundColorBottom": "#eef2f0"
+  "backgroundColorBottom": "#eef2f0",
+  "usingComponents": {
+    "plate-input": "/components/plate-input/index"
+  }
 }

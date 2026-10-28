@@ -13,6 +13,13 @@ function displayAreaText(text) {
   return String(text || '').replace(/座场区/g, '区').replace(/座/g, '区')
 }
 
+/** 贝位标题显示成「A1区-02贝」；没有场区或贝号（验箱区、出场口等）就用原名称 */
+function bayTitleOf(target) {
+  const block = displayAreaText(target.blockName)
+  if (block && target.slot) return `${block}-${target.slot}贝`
+  return displayAreaText(target.targetName)
+}
+
 /** 微信扫一扫打开时取二维码原文：普通链接码在 q 里（已编码），也兼容直接带 token */
 function scanContentOf(options) {
   if (options && options.q) return decodeURIComponent(options.q)
@@ -146,7 +153,7 @@ Page({
     // 场区名改成「区」再显示
     const target = selection.target ? {
       ...selection.target,
-      targetName: displayAreaText(selection.target.targetName),
+      targetName: bayTitleOf(selection.target),
       blockName: displayAreaText(selection.target.blockName)
     } : selection.target
     this.setData({

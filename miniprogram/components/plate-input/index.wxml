@@ -1,0 +1,37 @@
+<!-- 车牌格子：点哪格改哪格，最后一格是新能源位 -->
+<view class="plate-input">
+  <view class="cells">
+    <view
+      wx:for="{{cells}}"
+      wx:key="index"
+      class="cell {{index === 0 ? 'province' : ''}} {{index === 7 ? 'energy' : ''}} {{keyboardShow && cursor === index ? 'active' : ''}}"
+      data-index="{{index}}"
+      bindtap="onCellTap"
+    >{{item}}<text wx:if="{{!item && index === 0}}" class="cell-hint">省</text></view>
+  </view>
+  <view class="energy-toggle {{newEnergy ? 'on' : ''}}" bindtap="toggleNewEnergy">
+    <view class="check">{{newEnergy ? '✓' : ''}}</view>新能源车牌（绿牌 8 位）
+  </view>
+</view>
+
+<!-- 自带键盘：点空白处收起 -->
+<view wx:if="{{keyboardShow}}" class="keyboard-mask" bindtap="closeKeyboard" catchtouchmove="noop"></view>
+<view class="keyboard {{keyboardShow ? 'show' : ''}}" catchtouchmove="noop">
+  <view class="keyboard-bar">
+    <text class="keyboard-title">{{cursor === 0 ? '选择省份简称' : (cursor === 1 ? '选择发牌机关字母' : '输入字母或数字')}}</text>
+    <text class="keyboard-done" bindtap="closeKeyboard">完成</text>
+  </view>
+
+  <!-- 第 1 位：省份 -->
+  <view wx:if="{{cursor === 0}}" class="keys">
+    <view wx:for="{{provinces}}" wx:key="*this" class="key" data-key="{{item}}" bindtap="onKeyTap">{{item}}</view>
+    <view class="key key-del" bindtap="onDelete">删除</view>
+  </view>
+
+  <!-- 第 2 位起：数字一行 + 字母；第 2 位不能是数字 -->
+  <view wx:else class="keys">
+    <view wx:for="{{digits}}" wx:key="*this" class="key {{cursor === 1 ? 'disabled' : ''}}" data-key="{{item}}" data-disabled="{{cursor === 1}}" bindtap="onKeyTap">{{item}}</view>
+    <view wx:for="{{letters}}" wx:key="*this" class="key" data-key="{{item}}" bindtap="onKeyTap">{{item}}</view>
+    <view class="key key-del" bindtap="onDelete">删除</view>
+  </view>
+</view>

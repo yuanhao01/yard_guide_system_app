@@ -19,5 +19,17 @@
     "ignoreDevUnusedFiles": true
   },
   "libVersion": "3.16.2",
-  "condition": {}
+  "condition": {
+    "miniprogram": {
+      "list": [
+        {
+          "name": "扫小票",
+          "pathName": "pages/confirm-target/index",
+          "query": "q=https%3A%2F%2Fdct.hturing.com%2Fguide%2Fnavqr%3Fplate%3D%25E6%25B2%25AAA12345%26cy%3DXSL-GM%26loc%3DA1-02",
+          "scene": null,
+          "launchMode": "default"
+        }
+      ]
+    }
+  }
 }

@@ -209,6 +209,11 @@ Page({
       wx.showToast({ title: '请输入车牌号', icon: 'none' })
       return
     }
+    // 省份 + 字母 + 5 位（新能源 6 位）字母数字
+    if (!/^[\u4e00-\u9fa5][A-Z][A-Z0-9]{5,6}$/.test(plateNumber)) {
+      wx.showToast({ title: '车牌号不完整，请检查', icon: 'none' })
+      return
+    }
     if (!yard || !yard.id) {
       wx.showToast({ title: '请选择堆场', icon: 'none' })
       return
