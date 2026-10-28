@@ -222,14 +222,14 @@ Page({
         }
       })
       getApp().globalData.selectedTarget = null // 用完清掉，避免下次误用
-      wx.redirectTo({ url: `/pages/navigation/index?sessionId=${session.id}` })
+      wx.redirectTo({ url: `/packageNav/pages/navigation/index?sessionId=${session.id}` })
     } catch (error) {
       // 已有进行中任务：直接接着那一趟走
       if (/未完成|进行中/.test(error.message || '')) {
         try {
           const current = await request({ url: '/navigation/mobile/sessions/current' })
           if (current && current.id) {
-            wx.redirectTo({ url: `/pages/navigation/index?sessionId=${current.id}` })
+            wx.redirectTo({ url: `/packageNav/pages/navigation/index?sessionId=${current.id}` })
             return
           }
         } catch (ignore) {

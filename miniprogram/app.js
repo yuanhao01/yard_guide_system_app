@@ -6,12 +6,6 @@ const auth = require('./utils/auth')
 const collabUnread = require('./utils/collabUnread')
 const features = require('./utils/features')
 
-// 字面量路径给微信打包器用，真机才会带上 GLB；不要改成变量拼接
-void '/models/truck.glb'
-void '/models/stacker.glb'
-void '/models/container20.glb'
-void '/models/container40.glb'
-
 // 注册整个小程序，下面的方法所有页面都能用到
 App({
   /** 小程序刚启动时执行：把上次登录的用户读回来，首页才能显示姓名/堆场 */

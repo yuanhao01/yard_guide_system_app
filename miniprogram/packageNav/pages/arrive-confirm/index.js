@@ -2,8 +2,8 @@
  * 到位确认：到贝位、验箱区或出场口后直接确认，确认完回首页；验箱、出场由首页单独发起，不再自动接续。
  * 依赖：request、location、vehicleLoader（画集卡小景）、threejs。
  */
-const request = require('../../utils/request')
-const locationUtil = require('../../utils/location')
+const request = require('../../../utils/request')
+const locationUtil = require('../../../utils/location')
 const vehicleLoader = require('../../utils/vehicleLoader')
 const { createScopedThreejs } = require('../../libs/threejs/index.js')
 
@@ -181,6 +181,6 @@ Page({
       wx.switchTab({ url: '/pages/home/index' })
       return
     }
-    wx.redirectTo({ url: `/pages/navigation/index?sessionId=${this.data.sessionId}` })
+    wx.redirectTo({ url: `/packageNav/pages/navigation/index?sessionId=${this.data.sessionId}` })
   }
 })

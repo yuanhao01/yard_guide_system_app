@@ -2,16 +2,16 @@
  * 场内导航：跟车画蓝线、报下一句、上报位置、到了跳到位确认。
  * 依赖：config、request、auth、location、yardScene、voice、routeInstruction、heading。
  */
-const config = require('../../config')
-const request = require('../../utils/request')
-const auth = require('../../utils/auth')
-const locationUtil = require('../../utils/location')
-const features = require('../../utils/features')
+const config = require('../../../config')
+const request = require('../../../utils/request')
+const auth = require('../../../utils/auth')
+const locationUtil = require('../../../utils/location')
+const features = require('../../../utils/features')
 const yardScene = require('../../utils/yardScene')
-const voice = require('../../utils/voice')
-const routeInstruction = require('../../utils/routeInstruction')
-const headingSensor = require('../../utils/heading')
-const yardSocket = require('../../utils/yardSocket')
+const voice = require('../../../utils/voice')
+const routeInstruction = require('../../../utils/routeInstruction')
+const headingSensor = require('../../../utils/heading')
+const yardSocket = require('../../../utils/yardSocket')
 
 // 离最近道路超过这么多米算场外，和后端 RoutePlanner.OFF_YARD_METERS 一致
 const OFF_YARD_METERS = 500
@@ -505,7 +505,7 @@ Page({
       if (!canConfirmArrive(nextSession.purpose)) return
       setTimeout(() => {
         wx.redirectTo({
-          url: `/pages/arrive-confirm/index?sessionId=${this.sessionId}&targetName=${encodeURIComponent(displayAreaText(session.targetName || ''))}`
+          url: `/packageNav/pages/arrive-confirm/index?sessionId=${this.sessionId}&targetName=${encodeURIComponent(displayAreaText(session.targetName || ''))}`
         })
       }, 600)
     }
@@ -1220,7 +1220,7 @@ Page({
       success: result => {
         if (!result.confirm) return
         wx.redirectTo({
-          url: `/pages/arrive-confirm/index?sessionId=${this.sessionId}&targetName=${encodeURIComponent(name)}`
+          url: `/packageNav/pages/arrive-confirm/index?sessionId=${this.sessionId}&targetName=${encodeURIComponent(name)}`
         })
       }
     })

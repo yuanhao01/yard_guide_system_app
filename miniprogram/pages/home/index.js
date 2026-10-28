@@ -308,7 +308,7 @@ Page({
   continueNavigation() {
     const session = this.data.currentSession
     if (!session) return
-    wx.navigateTo({ url: `/pages/navigation/index?sessionId=${session.id}` })
+    wx.navigateTo({ url: `/packageNav/pages/navigation/index?sessionId=${session.id}` })
   },
 
   /** 一键去验箱区 */
@@ -363,7 +363,7 @@ Page({
         task: job, // 有已到位的作业就带上箱号等信息
         parentSessionId: job ? job.id : undefined
       })
-      wx.navigateTo({ url: `/pages/navigation/index?sessionId=${session.id}` })
+      wx.navigateTo({ url: `/packageNav/pages/navigation/index?sessionId=${session.id}` })
     } catch (error) {
       const message = error.message || '无法开始导航'
       const needSetting = /定位权限|定位服务|请在设置中允许|auth deny/i.test(message)

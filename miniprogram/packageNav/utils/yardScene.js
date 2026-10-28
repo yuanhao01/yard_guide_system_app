@@ -14,7 +14,7 @@ const { createScopedThreejs } = require('../libs/threejs/index.js')
 /** 引入集卡/箱子/道口/堆高机模型加载器 */
 const vehicleLoader = require('./vehicleLoader')
 /** 引入手机罗盘航向，跟车时车头跟手机转 */
-const headingSensor = require('./heading')
+const headingSensor = require('../../utils/heading')
 
 /** 箱垛默认总高度（米），给旧逻辑/占位用 */
 const STACK_HEIGHT = 7.8

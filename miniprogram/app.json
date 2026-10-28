@@ -1,11 +1,9 @@
 {
   "pages": [
-      "pages/login/index",
+    "pages/login/index",
     "pages/home/index",
     "pages/select-target/index",
     "pages/confirm-target/index",
-    "pages/navigation/index",
-    "pages/arrive-confirm/index",
     "pages/collab-group/index",
     "pages/profile/index"
   ],
@@ -50,5 +48,28 @@
   },
   "sitemapLocation": "sitemap.json",
   "style": "v2",
-  "lazyCodeLoading": "requiredComponents"
+  "lazyCodeLoading": "requiredComponents",
+  "subpackages": [
+    {
+      "root": "packageNav",
+      "pages": [
+        "pages/navigation/index",
+        "pages/arrive-confirm/index"
+      ]
+    }
+  ],
+  "preloadRule": {
+    "pages/home/index": {
+      "network": "all",
+      "packages": [
+        "packageNav"
+      ]
+    },
+    "pages/confirm-target/index": {
+      "network": "all",
+      "packages": [
+        "packageNav"
+      ]
+    }
+  }
 }

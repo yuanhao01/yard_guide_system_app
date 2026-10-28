@@ -4,15 +4,15 @@
  * 用来在场图上画出集卡、堆高机、箱子，到位页再画一小段车道小景。
  * 依赖：config（远端高模地址）。
  */
-const config = require('../config.js')
+const config = require('../../config.js')
 
 // 路径必须是源码里的字面量，微信 ignoreUploadUnusedFiles 才认，变量拼出来的 .glb 真机不会打进包
 const MODEL_FILES = {
-  truck: ['/models/truck.glb', 'models/truck.glb'], // 集卡，两种路径兼容不同打包
-  stacker: ['/models/stacker.glb', 'models/stacker.glb'], // 堆高机
-  container20: ['/models/container20.glb', 'models/container20.glb'], // 20 尺箱
-  container40: ['/models/container40.glb', 'models/container40.glb'], // 40 尺箱
-  crossing: ['/models/crossing.glb', 'models/crossing.glb'] // 路口地面
+  truck: ['/packageNav/models/truck.glb', 'packageNav/models/truck.glb'], // 集卡，两种路径兼容不同打包
+  stacker: ['/packageNav/models/stacker.glb', 'packageNav/models/stacker.glb'], // 堆高机
+  container20: ['/packageNav/models/container20.glb', 'packageNav/models/container20.glb'], // 20 尺箱
+  container40: ['/packageNav/models/container40.glb', 'packageNav/models/container40.glb'], // 40 尺箱
+  crossing: ['/packageNav/models/crossing.glb', 'packageNav/models/crossing.glb'] // 路口地面
 }
 
 /** 从安装包里读出某个模型的二进制，第一种路径失败再试第二种 */

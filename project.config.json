@@ -34,43 +34,43 @@
     ],
     "include": [
       {
-        "value": "miniprogram/models/truck.glb",
+        "value": "miniprogram/packageNav/models/truck.glb",
         "type": "file"
       },
       {
-        "value": "miniprogram/models/stacker.glb",
+        "value": "packageNav/models/truck.glb",
         "type": "file"
       },
       {
-        "value": "miniprogram/models/container20.glb",
+        "value": "miniprogram/packageNav/models/stacker.glb",
         "type": "file"
       },
       {
-        "value": "miniprogram/models/container40.glb",
+        "value": "packageNav/models/stacker.glb",
         "type": "file"
       },
       {
-        "value": "miniprogram/models/crossing.glb",
+        "value": "miniprogram/packageNav/models/container20.glb",
         "type": "file"
       },
       {
-        "value": "models/truck.glb",
+        "value": "packageNav/models/container20.glb",
         "type": "file"
       },
       {
-        "value": "models/stacker.glb",
+        "value": "miniprogram/packageNav/models/container40.glb",
         "type": "file"
       },
       {
-        "value": "models/container20.glb",
+        "value": "packageNav/models/container40.glb",
         "type": "file"
       },
       {
-        "value": "models/container40.glb",
+        "value": "miniprogram/packageNav/models/crossing.glb",
         "type": "file"
       },
       {
-        "value": "models/crossing.glb",
+        "value": "packageNav/models/crossing.glb",
         "type": "file"
       }
     ]
