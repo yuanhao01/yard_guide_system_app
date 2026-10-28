@@ -8,10 +8,10 @@ const auth = require('../../../utils/auth')
 const locationUtil = require('../../../utils/location')
 const features = require('../../../utils/features')
 const yardScene = require('../../utils/yardScene')
-const voice = require('../../../utils/voice')
-const routeInstruction = require('../../../utils/routeInstruction')
-const headingSensor = require('../../../utils/heading')
-const yardSocket = require('../../../utils/yardSocket')
+const voice = require('../../utils/voice')
+const routeInstruction = require('../../utils/routeInstruction')
+const headingSensor = require('../../utils/heading')
+const yardSocket = require('../../utils/yardSocket')
 
 // 离最近道路超过这么多米算场外，和后端 RoutePlanner.OFF_YARD_METERS 一致
 const OFF_YARD_METERS = 500

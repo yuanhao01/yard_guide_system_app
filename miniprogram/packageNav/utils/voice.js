@@ -5,8 +5,8 @@
  * 等过了这个弯、指令换成直行/下一弯/到达，再播下一句。
  * 依赖：config（接口地址）、auth（令牌）。
  */
-const config = require('../config')
-const auth = require('./auth')
+const config = require('../../config')
+const auth = require('../../utils/auth')
 
 let audio = null // 微信里用来播 mp3 的播放器，全程共用一个
 let lastPhaseKey = '' // 上一句已经播过的阶段（去掉数字后的文案），用来避免同一弯重复播
@@ -32,10 +32,15 @@ function phaseKey(text) {
 function ensureAudio() {
   // 已经有播放器就直接用
   if (audio) return audio
+  // 即使手机开了静音键也要播，导航不能被静音挡掉。
+  // 播放器上的 obeyMuteSwitch 新基础库已废弃、iOS 不认，必须走全局设置；
+  // mixWithOther：司机开着音乐也能插播，不把音乐停掉
+  if (wx.setInnerAudioOption) {
+    wx.setInnerAudioOption({ obeyMuteSwitch: false, mixWithOther: true })
+  }
   // 新建一个小程序内置播放器
   audio = wx.createInnerAudioContext()
-  // 即使手机开了静音键也要播，导航不能被静音挡掉
-  audio.obeyMuteSwitch = false
+  audio.obeyMuteSwitch = false // 老基础库还认这个，留着兜底
   // 播完后标记不在说话
   audio.onEnded(() => { speaking = false })
   // 被中途停掉也标记不在说话

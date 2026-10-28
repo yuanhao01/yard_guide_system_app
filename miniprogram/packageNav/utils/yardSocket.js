@@ -3,7 +3,7 @@
  * 连上后收 GPS_LOCATION，按 cyId / forkliftId 区分不同堆场、不同车。
  * 依赖：config（接口/长连接地址）、auth（登录令牌）。
  */
-const config = require('../config')
+const config = require('../../config')
 
 const HEARTBEAT_INTERVAL_MS = 20000
 const RECONNECT_BASE_MS = 2000
@@ -73,7 +73,7 @@ function createYardSocket(options) {
       try { state.task.close({ code: 1000, fail: () => {} }) } catch (error) { /* ignore */ }
       state.task = null
     }
-    const auth = require('./auth')
+    const auth = require('../../utils/auth')
     const user = auth.getUser() || {}
     const token = auth.getToken()
     const driverId = user.driverId || user.id || 'guest'
