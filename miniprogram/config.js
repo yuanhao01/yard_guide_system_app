@@ -8,23 +8,16 @@ module.exports = {
    * 开发者工具：详情 → 本地设置 → 勾选「不校验合法域名、web-view、TLS…」。
    * 真机调试：手机与电脑同一 Wi-Fi；Windows 防火墙放行 19207；后端需已启动且能连上 local 里的 MySQL/Redis。
    */
-  // apiBaseUrl: 'https://dct.hturing.com/guide',
-  // wsBaseUrl: 'wss://dct.hturing.com/guide',
-  apiBaseUrl: 'http://10.196.1.136:19207/guide',
-  wsBaseUrl: 'ws://10.196.1.136:19207/guide',
+  apiBaseUrl: 'https://dct.hturing.com/guide',
+  wsBaseUrl: 'wss://dct.hturing.com/guide',
+  // apiBaseUrl: 'http://10.196.1.136:19207/guide',
+  // wsBaseUrl: 'ws://10.196.1.136:19207/guide',
 
   /**
-   * 高精度模型的下载地址。小程序主包上限 2MB，集卡高模单个就 1.5MB+，
-   * 放不进包，只能运行时下载后缓存到本地。包内的低模负责首屏不空场。
-   *
-   * 不能写成 Windows 目录（C:\\...），微信必须走 http(s) 下载。
-   * 开发/联调：http://101.132.195.15/models （高模文件在该机 /data/www/models）。
-   * 开发者工具勾选「不校验合法域名」。
-   * 正式发布改成 https 域名，并在公众平台配置 downloadFile 合法域名。
-   * 置空则完全禁用远端模型，只用包内低模。
+   * 远端高精度模型的下载目录，目前不用：导航页本车是定位圆点，到位页用包内 models/*.glb 低模。
+   * 要恢复下载时填 https 地址（需在公众平台配置 downloadFile 合法域名），并在 utils/vehicleLoader.js 的 REMOTE_MODELS 登记文件。
    */
-  // modelBaseUrl: 'https://dct.hturing.com/models',
-  modelBaseUrl: 'http://10.196.1.136:19207/models',
+  modelBaseUrl: '',
   // 导航页本地跟车已是 onLocationChange（约 1Hz）；这里是上报后端的间隔，对齐 WTRTK 1Hz
   locationReportIntervalMs: 1000,
 

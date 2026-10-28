@@ -393,9 +393,10 @@ function loadVehicleData(name) {
 
 /* 服务端文件名拼成 <base>_v<version>.glb。
    版本号进文件名，新旧版本共存、CDN 可以长缓存；换模型时上传新文件并把 version 加一即可。 */
-const REMOTE_MODELS = {
-  truck: { base: 'truck_hd', version: 2 } // 目前只下集卡高模，换模型时把 version 加一
-}
+// 导航页本车已改成定位圆点，到位页用包内低模就够，不再下载集卡高模。
+// 以后要恢复：加回 truck: { base: 'truck_hd', version: 3 }，并在 config.js 配 modelBaseUrl。
+// 留空时 sweepCache 会顺手删掉手机里以前缓存的 model_truck_v2.glb（约 3MB）。
+const REMOTE_MODELS = {}
 
 /** 远端文件名：名字_版本.glb */
 function remoteFileOf(name) {

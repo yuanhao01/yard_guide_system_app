@@ -1839,19 +1839,74 @@ function createYardScene(canvas, width, height, dpr) {
     state.dirty = true
   }
 
-  /** 用 GLB 零件拼出本车集卡；模型没好就返回 null */
+  /** 本车定位点的半径（米，跟车距离下）；拉远拉近按 applyOverlayScale 同比缩放 */
+  const SELF_PUCK_RADIUS = 3.2
+
+  /** 平躺到地面的圆片 */
+  function flatCircle(radius, color, opacity) {
+    const geometry = new THREE.CircleBufferGeometry(radius, 48)
+    geometry.rotateX(-Math.PI / 2)
+    return new THREE.Mesh(geometry, new THREE.MeshBasicMaterial({
+      color, transparent: opacity < 1, opacity, side: THREE.DoubleSide, depthTest: false, depthWrite: false,
+      fog: false // 不进雾，拉远也不发灰
+    }))
+  }
+
+  /** 圆角导航箭头（尖朝局部 -Z，和原集卡车头同向，yawForTruck 不用改） */
+  function makeNavArrowGeometry(size) {
+    const s = size
+    const shape = new THREE.Shape() // 形状平面里 x 左右、y 前进
+    shape.moveTo(0, 0.62 * s) // 箭尖
+    shape.lineTo(0.42 * s, -0.42 * s) // 右翼
+    shape.quadraticCurveTo(0.46 * s, -0.56 * s, 0.32 * s, -0.5 * s) // 右后角倒圆
+    shape.lineTo(0, -0.26 * s) // 尾部凹口
+    shape.lineTo(-0.32 * s, -0.5 * s)
+    shape.quadraticCurveTo(-0.46 * s, -0.56 * s, -0.42 * s, -0.42 * s) // 左后角倒圆
+    shape.closePath()
+    const geometry = new THREE.ShapeBufferGeometry(shape, 8)
+    geometry.rotateX(-Math.PI / 2) // 平躺到地面，形状 +Y 变成局部 -Z
+    return geometry
+  }
+
+  /**
+   * 本车定位点，参照高德/苹果地图：亮蓝呼吸光圈 + 光晕 + 白边蓝圆 + 白色圆角箭头。
+   * 不依赖 GLB，打开就有；关深度测试最后画，压在路面、箱子、蓝线上不被挡。
+   */
   function buildSelfTruck(origin, yaw) {
-    // GLB 还没解析完就先不画，onModelReady 会回来补
-    const parts = vehicleLoader.getTruckParts()
-    if (!parts || !parts.length) return null
-    const truck = vehicleLoader.instantiate(THREE, parts, materialOpts) // 按户外材质实例化
-    truck.traverse(child => {
-      child.frustumCulled = false // 关视锥裁剪，避免近距离车身被切掉
-      if (child.isMesh) child.renderOrder = 6 // 比路面后画，不被路盖住
+    const r = SELF_PUCK_RADIUS
+    const marker = new THREE.Group()
+    const halo = flatCircle(r * 2.1, 0x38a1ff, 0.3) // 呼吸光圈，applySelfPose 里动
+    const glow = flatCircle(r * 1.18, 0x9fd0ff, 0.55) // 白边外一圈亮蓝光晕，压在深色箱区上也显眼
+    glow.position.y = 0.01
+    const rim = flatCircle(r, 0xffffff, 1) // 白边
+    rim.position.y = 0.02
+    const disc = flatCircle(r * 0.8, 0x1a8cff, 1) // 亮蓝底
+    disc.position.y = 0.03
+    const arrow = new THREE.Mesh(makeNavArrowGeometry(r * 0.95), new THREE.MeshBasicMaterial({
+      color: 0xffffff, side: THREE.DoubleSide, depthTest: false, depthWrite: false, fog: false
+    }))
+    arrow.position.set(0, 0.04, r * 0.04) // 箭头视觉重心居中
+    ;[halo, glow, rim, disc, arrow].forEach((mesh, index) => {
+      mesh.renderOrder = 20 + index // 从外到里依次画
+      mesh.frustumCulled = false
+      marker.add(mesh)
     })
-    truck.position.set(origin.x, 0.26, origin.z) // 略抬高，轮胎贴在路面上
-    truck.rotation.y = yaw
-    return truck
+    marker.position.set(origin.x, 0.6, origin.z)
+    marker.rotation.y = yaw
+    marker.userData.halo = halo
+    marker.userData.scaleWithView = true // 拉远时一起放大，不会缩成看不见的小点
+    marker.userData.baseScale = { x: 1, y: 1, z: 1 }
+    return marker
+  }
+
+  /** 光圈慢慢一呼一吸（约 2 秒一轮），提示这是实时位置 */
+  function pulseSelfHalo(marker) {
+    const halo = marker && marker.userData && marker.userData.halo
+    if (!halo) return
+    const t = (Date.now() % 2000) / 2000
+    const k = 0.75 + 0.35 * t
+    halo.scale.set(k, 1, k)
+    halo.material.opacity = 0.42 * (1 - t)
   }
 
   /** 与 buildRoads 主路面层 y=0.24 一致，道口底座贴齐行车面 */
@@ -2252,6 +2307,7 @@ function createYardScene(canvas, width, height, dpr) {
     }
     truck.position.set(poseSmooth.x, 0.26, poseSmooth.z)
     truck.rotation.y = poseSmooth.yaw
+    pulseSelfHalo(truck)
     updateCrossingVisibility() // 车一动，出场口显隐可能要变
   }
 
@@ -2419,6 +2475,7 @@ function createYardScene(canvas, width, height, dpr) {
     }
     apply(mapGroup)
     apply(dynamicGroup)
+    if (selfTruck) apply(selfTruck) // 本车箭头挂在 root 上，单独缩放
   }
 
   /** 画一帧：更新车、相机、叠加缩放，再真正渲染 */
@@ -2752,12 +2809,7 @@ function createYardScene(canvas, width, height, dpr) {
    */
   const offModelReady = vehicleLoader.onModelReady(name => { // GLB 解析完按名字补挂
     if (name === 'truck') {
-      if (selfTruck) {
-        root.remove(selfTruck) // 扔掉占位/旧模型
-        disposeObject(selfTruck)
-        selfTruck = null
-      }
-      applySelfPose() // 用新模型重新挂本车
+      // 本车已改成三角箭头，不用 GLB；集卡模型只在到位页小景里用
     } else if (name === 'container20' || name === 'container40') {
       state.containerTemplates = { // 箱子模板换新，下次建箱区用 GLB
         c20: vehicleLoader.createTemplate(THREE, vehicleLoader.getContainerParts(20)),
