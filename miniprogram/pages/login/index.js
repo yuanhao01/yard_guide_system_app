@@ -6,9 +6,7 @@ const request = require('../../utils/request')
 const auth = require('../../utils/auth')
 const collabUnread = require('../../utils/collabUnread')
 const features = require('../../utils/features')
-
-const LAST_PLATE_KEY = 'nav_last_plate' // 本机上次登录的车牌，微信识别没回来前先顶上
-const LAST_YARD_KEY = 'nav_last_cy_id' // 本机上次登录的堆场
+const { loginDriver, LAST_PLATE_KEY, LAST_YARD_KEY } = require('../../utils/driverLogin')
 
 /** 用 wx.login 拿一次性 code；拿不到就算了，不影响手动登录 */
 function wxLoginCode() {
@@ -20,8 +18,21 @@ function wxLoginCode() {
   })
 }
 
-/** 登录成功后切到首页（底部「导航/协同」那一栏） */
+/** 登录成功后切到首页（底部「导航/协同」那一栏）；微信扫码进来的回确认任务页接着解析 */
 function switchToHome() {
+  const pendingScan = getApp().globalData.pendingScan
+  if (pendingScan) {
+    getApp().globalData.pendingScan = null
+    return new Promise((resolve, reject) => {
+      wx.reLaunch({
+        url: `/pages/confirm-target/index?q=${encodeURIComponent(pendingScan)}`,
+        success: resolve,
+        fail() {
+          reject(new Error('登录成功，但页面跳转失败，请重试'))
+        }
+      })
+    })
+  }
   return new Promise((resolve, reject) => {
     wx.switchTab({
       url: '/pages/home/index', // 首页
@@ -59,7 +70,7 @@ Page({
     })
     // 手机里还有有效登录，不用再登
     if (auth.isLoggedIn()) {
-      wx.switchTab({ url: '/pages/home/index' })
+      switchToHome().catch(() => {})
       return
     }
     // 先用本机记的车牌顶上，不用等网络
@@ -204,19 +215,8 @@ Page({
     }
     this.setData({ submitting: true }) // 按钮转圈，防连点
     try {
-      const user = await request({
-        url: '/navigation/auth/driver-login',
-        method: 'POST',
-        data: { plateNumber, cyId: yard.id, wxTicket: this.wxTicket || '' }, // 车牌、堆场编号、微信票据
-        skipUnauthorizedRedirect: true // 账密错不要跳登录死循环
-      })
-      auth.setSession(user) // 把令牌和用户记到手机
-      getApp().globalData.user = user // 同步到全局，首页马上能用
+      await loginDriver({ plateNumber, cyId: yard.id, wxTicket: this.wxTicket })
       this.wxTicket = '' // 票据后台已用掉
-      wx.setStorageSync(LAST_PLATE_KEY, user.plateNumber || plateNumber) // 下次打开先填上
-      wx.setStorageSync(LAST_YARD_KEY, yard.id)
-      await features.refreshQuietly() // 进首页前拿到本堆场的模拟定位设置
-      collabUnread.start()
       await switchToHome() // 进首页
     } catch (error) {
       wx.showToast({ title: error.message, icon: 'none', duration: 2500 })

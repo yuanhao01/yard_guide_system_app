@@ -6,7 +6,7 @@
   </view>
 
   <view class="task-card">
-    <view class="badge">手动选位</view>
+    <view class="badge">{{sourceType === 1 ? '扫码定位' : '手动选位'}}</view>
     <view class="loc-name">{{target.targetName}}</view>
     <view class="loc-code">{{target.targetCode}}</view>
 
@@ -25,7 +25,7 @@
   </view>
 
   <button class="start-btn" loading="{{starting}}" disabled="{{starting}}" bindtap="startNavigation">开始导航</button>
-  <button class="secondary-button back-button" bindtap="goBack">重新选择箱区</button>
+  <button class="secondary-button back-button" bindtap="goBack">{{sourceType === 1 ? '返回首页' : '重新选择箱区'}}</button>
 
   <!-- 底部三步进度：当前在第 1 步 -->
   <view class="steps">

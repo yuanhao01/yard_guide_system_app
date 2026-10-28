@@ -40,6 +40,7 @@ App({
   globalData: {
     user: null, // 当前登录的司机或现场人员，没登录就是空
     selectedTarget: null, // 选贝位后暂存在这里，确认任务页再取走
+    pendingScan: null, // 微信扫码打开时还没登录，二维码原文先存这里，登录后回确认任务页
     navEtaMinutes: null // 导航页最新算出的预计分钟，协同群「预计到达」快捷回复要用它
   }
 })
