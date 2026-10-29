@@ -370,6 +370,10 @@ Page({
   async loadSession() {
     try {
       const session = await request({ url: `/navigation/mobile/sessions/${this.sessionId}` })
+      if (session.status === 3) { // 3 已取消：超时被系统结束，或已在别处结束
+        this.handleSessionEnded()
+        return
+      }
       this.applySession(session)
       await this.loadYardMap(session.cyId)
       await this.primeLocation()
@@ -936,7 +940,11 @@ Page({
       if (response.route) this.applySession(response)
       else this.applyLocationTick(response)
     } catch (error) {
-      if (this.ended || /已结束/.test(error.message || '')) return
+      if (this.ended) return
+      if (/已结束/.test(error.message || '')) {
+        this.handleSessionEnded()
+        return
+      }
       wx.showToast({ title: error.message, icon: 'none' })
     } finally {
       this.reporting = false
@@ -1198,7 +1206,11 @@ Page({
         this.applyLocationTick(response)
       }
     } catch (error) {
-      if (this.ended || /已结束/.test(error.message || '')) return
+      if (this.ended) return
+      if (/已结束/.test(error.message || '')) {
+        this.handleSessionEnded()
+        return
+      }
       wx.showToast({ title: error.message, icon: 'none' })
     } finally {
       this.reporting = false
@@ -1223,6 +1235,21 @@ Page({
           url: `/packageNav/pages/arrive-confirm/index?sessionId=${this.sessionId}&targetName=${encodeURIComponent(name)}`
         })
       }
+    })
+  },
+
+  /** 导航在后台已结束（长时间未继续被系统自动结束等）：停上报，提示后回首页 */
+  handleSessionEnded() {
+    if (this.ended) return
+    this.ended = true
+    this.stopLocationUpdates()
+    voice.resetPhase()
+    wx.showModal({
+      title: '导航已结束',
+      content: '本次导航已结束（长时间未继续会被系统自动结束），请回首页重新开始。',
+      showCancel: false,
+      confirmText: '回首页',
+      complete: () => wx.switchTab({ url: '/pages/home/index' })
     })
   },
 
