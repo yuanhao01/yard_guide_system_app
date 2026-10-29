@@ -1,21 +1,19 @@
 <!-- 首页：顶部堆场/岗位，下面按身份显示协同群或选贝位 -->
 <view class="page home-page">
-  <!-- 顶部深绿从状态栏一直铺下来，中间不再断一层 -->
-  <view class="hero" style="padding-top: {{statusBarHeight + 8}}px;">
-    <view class="hero-brand">堆场引导系统</view>
+  <!-- 顶部深绿从状态栏铺下来，压成「系统名 + 一行堆场」，把高度留给下面的操作 -->
+  <view class="hero" style="padding-top: {{statusBarHeight}}px;">
+    <view class="hero-brand" style="height: {{navBarHeight}}px; line-height: {{navBarHeight}}px;">堆场引导系统</view>
     <view class="hero-top">
-      <view>
+      <view class="hero-info">
         <view class="hero-label">{{isFieldRole ? (roleLabel || '现场岗位') : '当前堆场'}}</view>
         <view class="hero-title">{{isFieldRole ? (displayName || yardName || '现场岗位') : (yardName || '尚未选择堆场')}}</view>
+        <!-- 岗位大字是姓名，堆场名放小字；能切换时胶囊里已有堆场名 -->
+        <view class="hero-sub" wx:if="{{isFieldRole && yardName && !canSwitchYard}}">{{yardName}}</view>
       </view>
       <view class="yard-switch" wx:if="{{canSwitchYard}}" catchtap="chooseYard">
-        <view class="yard-switch-name">{{yardName || '选择堆场'}}</view>
-        <view class="yard-switch-action">切换</view>
+        <text class="yard-switch-name" wx:if="{{isFieldRole}}">{{yardName || '选择堆场'}}</text>
+        <text class="yard-switch-action">切换 ▾</text>
       </view>
-    </view>
-    <view class="hero-status">
-      <text class="status-dot"></text>
-      {{isFieldRole ? ((yardName || '') + (yardName ? ' · ' : '') + '协同服务已连接') : '导航服务已连接'}}
     </view>
   </view>
 
@@ -47,7 +45,7 @@
     </view>
   </block>
 
-  <!-- 司机：进行中任务、去贝位、验箱区/出场口、协同群、安全提示 -->
+  <!-- 司机：进行中任务、作业导航、安全提示、验箱区/出场口、协同群 -->
   <block wx:else>
     <view wx:if="{{currentSession}}" class="current-card" bindtap="continueNavigation">
       <view class="current-tag">进行中</view>
@@ -56,8 +54,8 @@
       <view class="current-action">{{currentAction}}</view>
     </view>
 
-    <!-- 去作业贝位：手动选和扫码放在同一张卡里 -->
-    <view class="section-title">去作业贝位</view>
+    <!-- 作业导航：手动选和扫码放在同一张卡里 -->
+    <view class="section-title">作业导航</view>
     <view class="job-card">
       <view class="job-head">
         <view class="action-icon select-icon">贝</view>
@@ -72,24 +70,28 @@
       </view>
     </view>
 
+    <!-- 行车安全提示放在一键导航上方，点出发前先看到 -->
     <view class="safety-card">
       <view class="safety-title">行车安全提示</view>
       <view class="safety-text">请在停车状态下操作手机。路线仅作场内辅助，请始终服从现场交通标识和人员指挥。</view>
     </view>
 
     <!-- 验箱区、出场口：点一下就按当前位置规划路线 -->
-    <view class="section-title"></view>
     <view class="section-title">一键导航</view>
     <view class="quick-grid">
       <view class="quick-card {{specialLoading === 'safety' ? 'quick-busy' : ''}}" bindtap="goSafety">
         <view class="quick-icon quick-icon-safety">验</view>
-        <view class="quick-title">验箱区</view>
-        <view class="quick-desc">{{specialLoading === 'safety' ? '规划中…' : '从当前位置出发'}}</view>
+        <view class="quick-text">
+          <view class="quick-title">验箱区</view>
+          <view class="quick-desc">{{specialLoading === 'safety' ? '规划中…' : '从当前位置出发'}}</view>
+        </view>
       </view>
       <view class="quick-card {{specialLoading === 'exit' ? 'quick-busy' : ''}}" bindtap="goExit">
         <view class="quick-icon quick-icon-exit">出</view>
-        <view class="quick-title">出场口</view>
-        <view class="quick-desc">{{specialLoading === 'exit' ? '规划中…' : '从当前位置出发'}}</view>
+        <view class="quick-text">
+          <view class="quick-title">出场口</view>
+          <view class="quick-desc">{{specialLoading === 'exit' ? '规划中…' : '从当前位置出发'}}</view>
+        </view>
       </view>
     </view>
 

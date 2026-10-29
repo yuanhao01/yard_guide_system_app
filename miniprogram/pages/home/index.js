@@ -108,14 +108,22 @@ Page({
     currentTitle: '', // 橙色卡标题
     currentDetail: '', // 橙色卡说明
     currentAction: '', // 橙色卡右下角按钮字
-    statusBarHeight: 20 // 自定义顶栏避开手机状态栏
+    statusBarHeight: 20, // 自定义顶栏避开手机状态栏
+    navBarHeight: 44 // 系统名那一行，和右上角胶囊按钮等高对齐
   },
 
   onLoad() {
     const windowInfo = wx.getWindowInfo ? wx.getWindowInfo() : wx.getSystemInfoSync()
-    this.setData({
-      statusBarHeight: (windowInfo && windowInfo.statusBarHeight) || 20
-    })
+    const statusBarHeight = (windowInfo && windowInfo.statusBarHeight) || 20
+    let navBarHeight = 44
+    try {
+      // 胶囊上下留白对称，导航行高 = 胶囊高 + 两倍（胶囊顶 - 状态栏）
+      const menu = wx.getMenuButtonBoundingClientRect()
+      if (menu && menu.height) navBarHeight = menu.height + (menu.top - statusBarHeight) * 2
+    } catch (error) {
+      navBarHeight = 44
+    }
+    this.setData({ statusBarHeight, navBarHeight })
   },
 
   /** 每次回到首页：没登录赶回登录，有登录就刷新任务/群 */

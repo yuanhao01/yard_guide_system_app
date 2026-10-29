@@ -3,17 +3,16 @@
   padding-top: 0;
 }
 
-/* 顶部深绿：从状态栏铺到堆场名，不再单独切一层导航栏 */
+/* 顶部深绿：从状态栏铺到堆场名，只占系统名 + 一行堆场的高度 */
 .hero {
-  margin: 0 -32rpx 36rpx;
-  padding: 0 40rpx 52rpx;
+  margin: 0 -32rpx 24rpx;
+  padding: 0 32rpx 24rpx;
   color: #ffffff;
-  background: linear-gradient(180deg, #0c2820 0%, #12372a 36%, #1a694b 100%);
+  background: linear-gradient(180deg, #0c2820 0%, #12372a 50%, #1a694b 100%);
 }
 
-/* 自定义顶栏上的系统名，替代原来微信自带那一条 */
+/* 自定义顶栏上的系统名，和右上角胶囊同一行 */
 .hero-brand {
-  margin-bottom: 28rpx;
   color: rgba(255, 255, 255, 0.92);
   font-size: 28rpx;
   font-weight: 600;
@@ -24,25 +23,37 @@
 /* 堆场名和右侧「切换」横排 */
 .hero-top {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
   gap: 20rpx;
+  margin-top: 8rpx;
 }
 
-/* 能进多个堆场时右上角切换胶囊 */
+/* 左边：小字标签 + 堆场名同一行 */
+.hero-info {
+  display: flex;
+  flex: 1;
+  flex-wrap: wrap;
+  align-items: baseline;
+  min-width: 0;
+  column-gap: 14rpx;
+}
+
+/* 能进多个堆场时右侧切换胶囊 */
 .yard-switch {
+  display: flex;
   flex-shrink: 0;
-  min-width: 180rpx;
-  padding: 10rpx 18rpx;
+  align-items: center;
+  gap: 10rpx;
+  padding: 8rpx 20rpx;
   border: 1rpx solid rgba(255, 255, 255, 0.28);
   border-radius: 999rpx;
   background: rgba(255, 255, 255, 0.12);
-  text-align: right;
 }
 
-/* 胶囊里当前堆场名，太长打点 */
+/* 岗位胶囊里当前堆场名，太长打点 */
 .yard-switch-name {
-  max-width: 220rpx;
+  max-width: 200rpx;
   overflow: hidden;
   color: #ffffff;
   font-size: 22rpx;
@@ -51,46 +62,42 @@
   text-overflow: ellipsis;
 }
 
-/* 胶囊里「切换」二字 */
+/* 胶囊里「切换」 */
 .yard-switch-action {
-  margin-top: 2rpx;
-  color: rgba(255, 255, 255, 0.72);
-  font-size: 20rpx;
+  color: rgba(255, 255, 255, 0.86);
+  font-size: 22rpx;
 }
 
-/* 「当前堆场 / 现场岗位」小字 */
+/* 「当前堆场 / 岗位名」小字 */
 .hero-label {
+  flex-shrink: 0;
   color: rgba(255, 255, 255, 0.62);
-  font-size: 24rpx;
+  font-size: 22rpx;
 }
 
-/* 顶部大标题：堆场名或岗位姓名 */
+/* 堆场名或岗位姓名 */
 .hero-title {
-  margin: 12rpx 0 26rpx;
-  font-size: 42rpx;
+  min-width: 0;
+  overflow: hidden;
+  font-size: 34rpx;
   font-weight: 700;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 
-/* 「导航服务已连接」那一行 */
-.hero-status {
-  font-size: 24rpx;
-}
-
-/* 状态前的绿色小圆点 */
-.status-dot {
-  display: inline-block;
-  width: 14rpx;
-  height: 14rpx;
-  margin-right: 12rpx;
-  border-radius: 50%;
-  background: #62e6a8;
+/* 岗位首页大字下的堆场名 */
+.hero-sub {
+  width: 100%;
+  margin-top: 4rpx;
+  color: rgba(255, 255, 255, 0.72);
+  font-size: 22rpx;
 }
 
 /* 司机进行中任务的橙色卡 */
 .current-card {
   position: relative;
-  margin-bottom: 36rpx;
-  padding: 30rpx;
+  margin-bottom: 24rpx;
+  padding: 24rpx 28rpx;
   overflow: hidden;
   border-radius: 24rpx;
   color: #ffffff;
@@ -108,7 +115,7 @@
 
 /* 橙色卡标题：前往某某 */
 .current-title {
-  margin-top: 18rpx;
+  margin-top: 12rpx;
   font-size: 32rpx;
   font-weight: 700;
 }
@@ -124,23 +131,23 @@
 .current-action {
   position: absolute;
   right: 30rpx;
-  bottom: 30rpx;
+  bottom: 24rpx;
   font-size: 25rpx;
   font-weight: 600;
 }
 
-/* 「去作业贝位 / 一键导航 / 协同交流群」小节标题 */
+/* 「作业导航 / 一键导航 / 协同交流群」小节标题 */
 .section-title {
-  margin: 0 4rpx 20rpx;
+  margin: 0 4rpx 14rpx;
   color: #52635b;
   font-size: 25rpx;
   font-weight: 600;
 }
 
-/* 去作业贝位的大白卡：上面说明，下面两个按钮 */
+/* 作业导航的大白卡：上面说明，下面两个按钮 */
 .job-card {
-  margin-bottom: 36rpx;
-  padding: 30rpx;
+  margin-bottom: 24rpx;
+  padding: 24rpx;
   border: 1rpx solid #e1e9e5;
   border-radius: 24rpx;
   background: #ffffff;
@@ -156,20 +163,20 @@
 .job-actions {
   display: flex;
   gap: 18rpx;
-  margin-top: 28rpx;
+  margin-top: 22rpx;
 }
 
 /* 卡片里的按钮，默认浅绿描边 */
 .job-btn {
   flex: 1;
-  height: 84rpx;
+  height: 80rpx;
   border: 2rpx solid #147d55;
   border-radius: 18rpx;
   color: #147d55;
   background: #ffffff;
   font-size: 28rpx;
   font-weight: 700;
-  line-height: 80rpx;
+  line-height: 76rpx;
   text-align: center;
   box-sizing: border-box;
 }
@@ -184,13 +191,15 @@
 .quick-grid {
   display: flex;
   gap: 22rpx;
-  margin-bottom: 28rpx;
+  margin-bottom: 24rpx;
 }
 
-/* 一键导航小卡 */
+/* 一键导航小卡：图标在左、文字在右，压低高度 */
 .quick-card {
+  display: flex;
   flex: 1;
-  padding: 28rpx 26rpx;
+  align-items: center;
+  padding: 22rpx;
   border: 1rpx solid #e1e9e5;
   border-radius: 24rpx;
   background: #ffffff;
@@ -203,6 +212,7 @@
 
 /* 小卡左上方标 */
 .quick-icon {
+  flex-shrink: 0;
   width: 72rpx;
   height: 72rpx;
   border-radius: 20rpx;
@@ -224,30 +234,36 @@
   background: #fff0d9;
 }
 
+/* 方标右边的标题和说明 */
+.quick-text {
+  flex: 1;
+  min-width: 0;
+  margin-left: 18rpx;
+}
+
 /* 小卡标题 */
 .quick-title {
-  margin-top: 20rpx;
-  font-size: 31rpx;
+  font-size: 30rpx;
   font-weight: 700;
 }
 
 /* 小卡灰色说明 */
 .quick-desc {
-  margin-top: 8rpx;
+  margin-top: 4rpx;
   color: #7c8983;
-  font-size: 23rpx;
+  font-size: 22rpx;
 }
 
 /* 白卡左边绿色方标 */
 .action-icon {
-  width: 92rpx;
-  height: 92rpx;
+  width: 80rpx;
+  height: 80rpx;
   border-radius: 24rpx;
   color: #ffffff;
   background: #147d55;
-  font-size: 32rpx;
+  font-size: 30rpx;
   font-weight: 700;
-  line-height: 92rpx;
+  line-height: 80rpx;
   text-align: center;
 }
 
@@ -279,8 +295,8 @@
 /* 协同群深蓝卡片 */
 .collab-card {
   position: relative;
-  margin: 8rpx 0 28rpx;
-  padding: 28rpx;
+  margin: 0 0 24rpx;
+  padding: 24rpx 28rpx;
   border-radius: 24rpx;
   background: linear-gradient(135deg, #0f2c50, #1a4a7a);
   color: #ffffff;
@@ -330,7 +346,7 @@
 
 /* 群名 */
 .collab-title {
-  margin-top: 16rpx;
+  margin-top: 12rpx;
   font-size: 30rpx;
   font-weight: 700;
 }
@@ -348,8 +364,8 @@
   align-items: center;
   justify-content: space-between;
   gap: 16rpx;
-  margin-top: 18rpx;
-  padding-top: 16rpx;
+  margin-top: 14rpx;
+  padding-top: 12rpx;
   border-top: 1rpx solid rgba(255, 255, 255, 0.12);
 }
 
@@ -368,10 +384,10 @@
   font-size: 20rpx;
 }
 
-/* 底部行车安全提示黄条 */
+/* 一键导航上方的行车安全提示黄条 */
 .safety-card {
-  margin-top: 42rpx;
-  padding: 26rpx;
+  margin-bottom: 24rpx;
+  padding: 18rpx 24rpx;
   border-left: 7rpx solid #d58424;
   border-radius: 6rpx 18rpx 18rpx 6rpx;
   background: #fff8eb;
@@ -380,16 +396,16 @@
 /* 安全提示标题 */
 .safety-title {
   color: #7c490a;
-  font-size: 25rpx;
+  font-size: 24rpx;
   font-weight: 700;
 }
 
 /* 安全提示正文 */
 .safety-text {
-  margin-top: 10rpx;
+  margin-top: 6rpx;
   color: #826a4c;
-  font-size: 23rpx;
-  line-height: 1.7;
+  font-size: 22rpx;
+  line-height: 1.6;
 }
 
 /* 岗位没有群时的虚线空状态 */
