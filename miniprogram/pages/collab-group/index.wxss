@@ -59,10 +59,11 @@ page {
   font-size: 22rpx;
 }
 
-/* 右上在线人数 */
+/* 任务名下面的在线人数 */
 .online {
   display: flex;
   align-items: center;
+  margin-top: 6rpx;
   color: rgba(255, 255, 255, 0.9);
   font-size: 22rpx;
 }
@@ -392,4 +393,100 @@ page {
   font-size: 26rpx;
   font-weight: 700;
   line-height: 1;
+}
+
+/* 「语音 / 键盘」切换圆钮，字比「＋」小 */
+.mode-toggle {
+  font-size: 22rpx;
+  font-weight: 600;
+}
+
+/* 语音条：宽度随秒数变化 */
+.voice-bubble {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-width: 150rpx;
+  max-width: 460rpx;
+  box-sizing: border-box;
+}
+
+/* 正在播放的语音条变淡一点 */
+.voice-playing {
+  opacity: 0.75;
+}
+
+/* 语音条里的播放 / 停止符号 */
+.voice-icon {
+  font-size: 24rpx;
+}
+
+/* 语音条里的秒数 */
+.voice-sec {
+  font-size: 26rpx;
+  font-weight: 600;
+}
+
+/* 「按住 说话」大按钮，占满输入框位置 */
+.hold-talk {
+  flex: 1;
+  height: 72rpx;
+  border-radius: 999rpx;
+  background: #f1f5f9;
+  color: #1e293b;
+  font-size: 28rpx;
+  font-weight: 700;
+  line-height: 72rpx;
+  text-align: center;
+}
+
+/* 按住时变深 */
+.hold-talk.active {
+  background: #cbd5e1;
+}
+
+/* 发送中或群解散时灰掉 */
+.hold-talk.disabled {
+  color: #94a3b8;
+}
+
+/* 录音浮层：不挡触摸，手指仍在按钮上 */
+.record-mask {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+
+/* 浮层中间的黑色方块 */
+.record-panel {
+  width: 320rpx;
+  padding: 40rpx 24rpx;
+  border-radius: 24rpx;
+  background: rgba(15, 23, 42, 0.78);
+  color: #ffffff;
+  text-align: center;
+}
+
+/* 上滑取消时变红 */
+.record-panel.cancel {
+  background: rgba(180, 35, 24, 0.85);
+}
+
+/* 已录秒数 */
+.record-time {
+  font-size: 64rpx;
+  font-weight: 700;
+}
+
+/* 浮层提示字 */
+.record-tip {
+  margin-top: 12rpx;
+  font-size: 24rpx;
 }

@@ -4,6 +4,7 @@
  * GET  /navigation/mobile/collab/{groupId}/messages?sinceSeq=
  * POST /navigation/mobile/collab/{groupId}/messages
  * POST /navigation/mobile/collab/{groupId}/read
+ * POST /navigation/mobile/collab/{groupId}/images、/voices（图片、语音上传）
  *
  * 消息走 WebSocket 实时推送，在线人数由各成员的连接状态决定；
  * 断线期间可能漏推，重连后用 sinceSeq 补齐。
@@ -87,6 +88,19 @@ function quickRepliesForUser() {
   return DRIVER_QUICK
 }
 
+// 语音：最长 60 秒（到点录音器自动停并发出），短于 1 秒不发
+const VOICE_MAX_MS = 60000
+const VOICE_MIN_MS = 1000
+// 按住说话时手指上滑超过这么多 px 算取消
+const VOICE_CANCEL_DY = 80
+const RECORD_OPTIONS = {
+  duration: VOICE_MAX_MS,
+  format: 'mp3',
+  sampleRate: 16000,
+  numberOfChannels: 1,
+  encodeBitRate: 48000
+}
+
 /** 把后台给的相对路径拼成能打开的图片地址 */
 function resolveFileUrl(path) {
   if (!path) return ''
@@ -114,9 +128,16 @@ function decorate(message) {
     card = extra
   }
   const imageUrl = message.msgType === 3 ? resolveFileUrl(extra.url || message.content) : ''
+  const voiceUrl = message.msgType === 4 ? resolveFileUrl(extra.url) : ''
+  const voiceSeconds = Math.max(1, Math.min(60, Number(extra.seconds) || Math.round(Number(extra.durationMs) / 1000) || 1))
+  let type = 'text'
+  if (card) type = 'machine'
+  else if (message.msgType === 2) type = 'system'
+  else if (imageUrl) type = 'image'
+  else if (voiceUrl) type = 'voice'
   return {
     id: message.id, // 消息编号
-    type: card ? 'machine' : (message.msgType === 2 ? 'system' : (imageUrl ? 'image' : 'text')),
+    type,
     roleClass: style.cls, // 头像颜色类
     avatar: style.avatar, // 头像字
     name: message.senderName, // 发送人
@@ -124,6 +145,9 @@ function decorate(message) {
     time: message.sendTimeText || '',
     text: message.content || '',
     imageUrl,
+    voiceUrl, // 语音地址
+    voiceSeconds, // 语音秒数
+    voiceWidth: 150 + voiceSeconds * 5, // 语音条宽度（rpx），越长越宽
     self: Boolean(message.self), // 是不是自己发的
     etaMin: card ? card.etaMin : null, // 堆高机预计分钟
     routeText: card ? card.routeText : '',
@@ -151,7 +175,12 @@ Page({
     messages: [], // 聊天记录
     quickReplies: DRIVER_QUICK, // 底部快捷回复
     pendingNewCount: 0, // 往上翻时新来的未看条数
-    pendingNewText: '' // 右上角未读数字
+    pendingNewText: '', // 右上角未读数字
+    voiceMode: false, // 输入栏切到「按住说话」
+    recording: false, // 正在录音
+    recordCancel: false, // 手指已上滑，松开就取消
+    recordSeconds: 0, // 已录秒数
+    playingId: '' // 正在播放的语音消息编号
   },
 
   /** 进页：记会话/群号，听前后台，拉字典和群 */
@@ -173,6 +202,8 @@ Page({
     this.socket = null
     this._onAppHide = () => {
       this._foreground = false
+      this.abortRecord()
+      this.stopVoice()
       this.stopPoll()
       this.closeSocket()
     }
@@ -184,6 +215,7 @@ Page({
     }
     wx.onAppHide(this._onAppHide)
     wx.onAppShow(this._onAppShow)
+    this.initVoice()
     this.loadDict().finally(() => this.loadGroup())
   },
 
@@ -209,6 +241,11 @@ Page({
     if (this._onAppShow) wx.offAppShow(this._onAppShow)
     this.stopPoll()
     this.closeSocket()
+    this.abortRecord()
+    if (this.audio) {
+      this.audio.destroy()
+      this.audio = null
+    }
     collabUnread.setActiveGroup(null)
     if (this._markReadTimer) {
       clearTimeout(this._markReadTimer)
@@ -510,18 +547,23 @@ Page({
   uploadPicked(file) {
     const filePath = file && (file.tempFilePath || file.path)
     if (!filePath || !this.groupId) return
+    this.uploadToGroup('images', filePath, {
+      width: file.width || 0,
+      height: file.height || 0
+    }, '图片发送失败')
+  },
+
+  /** 图片、语音共用的上传：成功后当作自己的一条消息落地 */
+  uploadToGroup(kind, filePath, formData, failText) {
     this.setData({ sending: true })
     wx.uploadFile({
-      url: `${config.apiBaseUrl}/navigation/mobile/collab/${this.groupId}/images`,
+      url: `${config.apiBaseUrl}/navigation/mobile/collab/${this.groupId}/${kind}`,
       filePath,
       name: 'file',
       header: {
         satoken: auth.getToken() || ''
       },
-      formData: {
-        width: file.width || 0,
-        height: file.height || 0
-      },
+      formData,
       timeout: 30000,
       success: res => {
         let body = {}
@@ -539,10 +581,10 @@ Page({
           this.appendMessage(body.data)
           return
         }
-        wx.showToast({ title: body.msg || '图片发送失败', icon: 'none' })
+        wx.showToast({ title: body.msg || failText, icon: 'none' })
       },
       fail: error => {
-        wx.showToast({ title: error.errMsg || '图片发送失败', icon: 'none' })
+        wx.showToast({ title: error.errMsg || failText, icon: 'none' })
       },
       complete: () => this.setData({ sending: false })
     })
@@ -554,6 +596,190 @@ Page({
     if (!url) return
     const urls = (this.data.messages || []).map(item => item.imageUrl).filter(Boolean)
     wx.previewImage({ current: url, urls: urls.length ? urls : [url] })
+  },
+
+  /** 录音器和播放器各一个，回调在这里挂一次 */
+  initVoice() {
+    this._recState = 'idle' // idle 空闲 / starting 已调 start 未开始 / recording 录音中 / stopping 等结果
+    this._recCancel = false
+    this._recordAuthed = false
+    // 以前授权过就不用再问，第一次按住就能录
+    wx.getSetting({
+      success: res => {
+        if (res.authSetting && res.authSetting['scope.record']) this._recordAuthed = true
+      }
+    })
+    // 录音器是全局单例，回调会跟着每次进页累加；本页没在录（idle）时一律忽略，免得旧页面也去上传
+    const recorder = wx.getRecorderManager()
+    this.recorder = recorder
+    recorder.onStart(() => {
+      if (this._recState === 'idle') return
+      // 手指在录音真正开始前就松开了：开始后立刻停
+      if (this._recState === 'stopping') {
+        recorder.stop()
+        return
+      }
+      this._recState = 'recording'
+    })
+    recorder.onStop(res => {
+      if (this._recState === 'idle') return
+      const cancel = this._recCancel
+      this.resetRecord()
+      if (cancel || !res || !res.tempFilePath) return
+      if ((res.duration || 0) < VOICE_MIN_MS) {
+        wx.showToast({ title: '说话时间太短', icon: 'none' })
+        return
+      }
+      if (this.data.dissolved || !this.groupId) return
+      this.uploadToGroup('voices', res.tempFilePath, {
+        durationMs: Math.min(Math.round(res.duration), VOICE_MAX_MS)
+      }, '语音发送失败')
+    })
+    recorder.onError(error => {
+      if (this._recState === 'idle') return
+      this.resetRecord()
+      const message = (error && error.errMsg) || ''
+      if (/auth|permission/i.test(message)) {
+        this._recordAuthed = false
+        this.ensureRecordAuth()
+        return
+      }
+      wx.showToast({ title: '录音失败，请重试', icon: 'none' })
+    })
+
+    // 静音键打开时也要能听见，和导航语音同一设置
+    if (wx.setInnerAudioOption) {
+      wx.setInnerAudioOption({ obeyMuteSwitch: false, mixWithOther: true })
+    }
+    const audio = wx.createInnerAudioContext()
+    this.audio = audio
+    const clear = () => this.setData({ playingId: '' })
+    audio.onEnded(clear)
+    audio.onStop(clear)
+    audio.onError(() => {
+      // 没在播（比如空 src 上调了 stop）时 iOS 也会报错，不提示
+      if (!this.data.playingId) return
+      clear()
+      wx.showToast({ title: '语音播放失败', icon: 'none' })
+    })
+  },
+
+  /** 麦克风授权：没授权就申请，之前拒绝过就引导去设置 */
+  ensureRecordAuth() {
+    return new Promise(resolve => {
+      wx.authorize({
+        scope: 'scope.record',
+        success: () => {
+          this._recordAuthed = true
+          resolve(true)
+        },
+        fail: () => {
+          wx.showModal({
+            title: '需要麦克风权限',
+            content: '发送语音需要使用麦克风，请在设置中允许。',
+            confirmText: '去设置',
+            success: result => {
+              if (result.confirm) wx.openSetting()
+            }
+          })
+          resolve(false)
+        }
+      })
+    })
+  },
+
+  /** 「语音 / 键盘」切换；切到语音时先把授权要好，免得按住时才弹窗 */
+  toggleVoiceMode() {
+    if (this.data.dissolved) {
+      wx.showToast({ title: '协同群已解散', icon: 'none' })
+      return
+    }
+    const voiceMode = !this.data.voiceMode
+    this.setData({ voiceMode })
+    if (voiceMode && !this._recordAuthed) this.ensureRecordAuth()
+  },
+
+  /** 按下：开始录音 */
+  onVoiceStart(event) {
+    if (this.data.sending || this.data.dissolved || !this.groupId || this._recState !== 'idle') return
+    if (!this._recordAuthed) {
+      this.ensureRecordAuth()
+      return
+    }
+    const touch = (event.touches && event.touches[0]) || {}
+    this._touchStartY = touch.clientY || 0
+    this._recCancel = false
+    this._recState = 'starting'
+    this.stopVoice()
+    this.setData({ recording: true, recordCancel: false, recordSeconds: 0 })
+    this._recTimer = setInterval(() => {
+      this.setData({ recordSeconds: Math.min(60, this.data.recordSeconds + 1) })
+    }, 1000)
+    this.recorder.start(RECORD_OPTIONS)
+  },
+
+  /** 按住时手指上滑超过阈值就进入「松开取消」 */
+  onVoiceMove(event) {
+    if (this._recState === 'idle') return
+    const touch = (event.touches && event.touches[0]) || {}
+    const cancel = this._touchStartY - (touch.clientY || 0) > VOICE_CANCEL_DY
+    if (cancel !== this._recCancel) {
+      this._recCancel = cancel
+      this.setData({ recordCancel: cancel })
+    }
+  },
+
+  /** 松开：停录音，结果在 onStop 里决定发不发 */
+  onVoiceEnd() {
+    if (this._recState === 'idle' || this._recState === 'stopping') return
+    const started = this._recState === 'recording'
+    this._recState = 'stopping'
+    if (started) this.recorder.stop()
+  },
+
+  /** 被来电等打断：按取消处理 */
+  onVoiceCancel() {
+    this._recCancel = true
+    this.onVoiceEnd()
+  },
+
+  /** 切后台、离开页面时丢弃正在录的语音 */
+  abortRecord() {
+    if (!this.recorder || this._recState === 'idle') return
+    this._recCancel = true
+    const started = this._recState === 'recording'
+    this._recState = 'stopping'
+    if (started) this.recorder.stop()
+  },
+
+  /** 录音结束（发出、取消或出错）后回到空闲，停掉秒数计时 */
+  resetRecord() {
+    if (this._recTimer) {
+      clearInterval(this._recTimer)
+      this._recTimer = null
+    }
+    this._recState = 'idle'
+    this._recCancel = false
+    this.setData({ recording: false, recordCancel: false, recordSeconds: 0 })
+  },
+
+  /** 点语音条播放，再点一次停止；同时只播一条 */
+  playVoice(event) {
+    const { id, url } = event.currentTarget.dataset
+    if (!url || !this.audio) return
+    if (this.data.playingId === id) {
+      this.audio.stop()
+      return
+    }
+    // 换 src 会自动停掉上一条；第一次播放前 src 为空，此时调 stop 在 iOS 上会触发 onError
+    this.audio.src = url
+    this.audio.play()
+    this.setData({ playingId: id })
+  },
+
+  /** 停掉正在播放的语音（开始录音、切后台时） */
+  stopVoice() {
+    if (this.audio && this.data.playingId) this.audio.stop()
   },
 
   /** 发出一条文字 */

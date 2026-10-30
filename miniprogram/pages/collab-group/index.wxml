@@ -6,10 +6,11 @@
       <view class="heading">
         <view class="title">现场协同群</view>
         <view class="sub">{{taskLabel || '作业任务'}}</view>
-      </view>
-      <view class="online">
-        <view class="header-unread" wx:if="{{pendingNewCount > 0}}">{{pendingNewText}}</view>
-        <text class="online-dot {{dissolved || !connected ? 'off' : ''}}"></text>{{dissolved ? statusText : ((connected ? '' : '补拉 · ') + onlineCount + '/' + memberCount + '人在线')}}
+        <!-- 在线人数放在任务名下面，右上角留给微信胶囊按钮 -->
+        <view class="online">
+          <view class="header-unread" wx:if="{{pendingNewCount > 0}}">{{pendingNewText}}</view>
+          <text class="online-dot {{dissolved || !connected ? 'off' : ''}}"></text>{{dissolved ? statusText : ((connected ? '' : '补拉 · ') + onlineCount + '/' + memberCount + '人在线')}}
+        </view>
       </view>
     </view>
   </view>
@@ -54,6 +55,18 @@
           />
         </view>
 
+        <view
+          wx:if="{{item.type === 'voice'}}"
+          class="bubble voice-bubble {{item.self ? 'bubble-mine' : ''}} {{playingId === item.id ? 'voice-playing' : ''}}"
+          style="width: {{item.voiceWidth}}rpx;"
+          bindtap="playVoice"
+          data-id="{{item.id}}"
+          data-url="{{item.voiceUrl}}"
+        >
+          <text class="voice-icon">{{playingId === item.id ? '■' : '▶'}}</text>
+          <text class="voice-sec">{{item.voiceSeconds}}″</text>
+        </view>
+
         <view wx:if="{{item.type === 'machine'}}" class="machine-card">
           <view class="machine-title">堆高机动态</view>
           <view class="machine-eta">预计 <text class="machine-num">{{item.etaMin}}</text> 分钟到达</view>
@@ -64,6 +77,14 @@
     </view>
     <view class="chat-pad"></view>
   </scroll-view>
+
+  <!-- 录音中浮层：秒数、上滑取消、最后 10 秒倒计时 -->
+  <view class="record-mask" wx:if="{{recording}}">
+    <view class="record-panel {{recordCancel ? 'cancel' : ''}}">
+      <view class="record-time">{{recordSeconds}}″</view>
+      <view class="record-tip">{{recordCancel ? '松开手指，取消发送' : (recordSeconds >= 50 ? '还可以说 ' + (60 - recordSeconds) + ' 秒' : '手指上滑，取消发送')}}</view>
+    </view>
+  </view>
 
   <view class="new-msg-tip" wx:if="{{pendingNewCount > 0}}" bindtap="jumpToLatest">
     {{pendingNewText}}条新消息
@@ -80,9 +101,21 @@
       >{{item.label}}</view>
     </view>
     <view class="input-row">
+      <!-- 语音 / 键盘切换 -->
+      <view class="attach mode-toggle {{dissolved ? 'disabled' : ''}}" bindtap="toggleVoiceMode">{{voiceMode ? '键盘' : '语音'}}</view>
       <view class="attach {{sending || dissolved ? 'disabled' : ''}}" bindtap="chooseImageSource">＋</view>
-      <input class="input" placeholder="{{dissolved ? '协同群已解散' : '回复群消息…'}}" disabled="{{dissolved}}" value="{{draft}}" bindinput="onDraft" confirm-type="send" bindconfirm="sendDraft" />
-      <view class="send {{sending || dissolved ? 'disabled' : ''}}" bindtap="sendDraft">发送</view>
+      <block wx:if="{{!voiceMode}}">
+        <input class="input" placeholder="{{dissolved ? '协同群已解散' : '回复群消息…'}}" disabled="{{dissolved}}" value="{{draft}}" bindinput="onDraft" confirm-type="send" bindconfirm="sendDraft" />
+        <view class="send {{sending || dissolved ? 'disabled' : ''}}" bindtap="sendDraft">发送</view>
+      </block>
+      <view
+        wx:else
+        class="hold-talk {{recording ? 'active' : ''}} {{sending || dissolved ? 'disabled' : ''}}"
+        bindtouchstart="onVoiceStart"
+        catchtouchmove="onVoiceMove"
+        bindtouchend="onVoiceEnd"
+        bindtouchcancel="onVoiceCancel"
+      >{{dissolved ? '协同群已解散' : (sending ? '发送中…' : (recording ? (recordCancel ? '松开 取消' : '松开 发送') : '按住 说话'))}}</view>
     </view>
   </view>
 </view>
